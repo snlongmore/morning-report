@@ -83,7 +83,8 @@ class TestWeatherGatherer:
         assert len(loc["forecast"]) == 2
         assert loc["forecast"][0]["description"] == "light rain"
 
-    def test_gather_uses_coords_for_known_locations(self):
+    def test_gather_always_uses_q_param(self):
+        """Free-tier OWM doesn't support lat/lon — always use q= for location."""
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
             "weather": [{"description": "clear"}],
@@ -111,42 +112,9 @@ class TestWeatherGatherer:
             })
             g.gather()
 
-        # Should use lat/lon, not q parameter
-        assert "lat" in calls[0]
-        assert "lon" in calls[0]
-        assert "q" not in calls[0]
-
-    def test_gather_unknown_location_uses_q(self):
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "weather": [{"description": "sunny"}],
-            "main": {"temp": 25, "feels_like": 24, "humidity": 40},
-            "wind": {"speed": 2},
-        }
-        mock_resp.raise_for_status = MagicMock()
-
-        mock_forecast = MagicMock()
-        mock_forecast.json.return_value = {"list": []}
-        mock_forecast.raise_for_status = MagicMock()
-
-        calls = []
-
-        def mock_get(url, **kwargs):
-            calls.append(kwargs.get("params", {}))
-            if "forecast" in url:
-                return mock_forecast
-            return mock_resp
-
-        with patch("morning_report.gatherers.weather.requests.get", side_effect=mock_get):
-            g = WeatherGatherer(config={
-                "api_key": "test-key",
-                "locations": ["Sydney, AU"],
-            })
-            g.gather()
-
-        # Should use q parameter for unknown location
         assert "q" in calls[0]
-        assert calls[0]["q"] == "Sydney, AU"
+        assert calls[0]["q"] == "West Kirby, UK"
+        assert "lat" not in calls[0]
 
     def test_safe_gather_skipped_without_key(self):
         g = WeatherGatherer(config={"api_key": ""})

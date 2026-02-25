@@ -51,17 +51,11 @@ class WeatherGatherer(BaseGatherer):
         forecasts: dict[str, Any] = {}
 
         for location in self._locations:
-            coords = _get_coords(location)
-
             params: dict[str, Any] = {
                 "appid": self._api_key,
                 "units": "metric",
+                "q": location,
             }
-            if coords:
-                params["lat"] = coords[0]
-                params["lon"] = coords[1]
-            else:
-                params["q"] = location
 
             # Current weather
             try:
