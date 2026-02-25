@@ -1,0 +1,95 @@
+# Morning Report Configuration
+# Copy to config.yaml and fill in your values.
+# Environment variables can be referenced as ${VAR_NAME}.
+
+user:
+  name: "Steven Longmore"
+  ads_author: "longmore, s.n."
+  orcid: "0000-0001-6353-0170"
+  location: "West Kirby, UK"
+
+email:
+  accounts:
+    - "snlongmore@gmail.com"
+    - "steve@upshot.xyz"
+    - "CoolResearch"
+    - "LJMU"
+    - "snl@liverpool.ac.uk"
+    - "snl@dedomenadata.space"
+    - "snl@bolgiaten.com"
+  vip_senders: []
+
+calendar:
+  calendars:
+    - "Calendar"
+    - "ARI colloquia"
+    - "ARI Seminars"
+    - "Steven Longmore"
+    - "exercise"
+    - "ACES Meetings"
+    - "Research Leave"
+    - "Research Group"
+    - "family"
+    - "steve@upshot.xyz"
+    - "Scheduled Reminders"
+    - "UK Holidays"
+  excluded:
+    - "Work"
+    - "Home"
+    - "LACE"
+    - "JW"
+    - "UP"
+    - "GN ARI"
+    - "Birthdays"
+    - "Siri Suggestions"
+  lookahead_days: 3
+
+ads:
+  api_token: "${ADS_API_TOKEN}"
+
+arxiv:
+  categories:
+    - "astro-ph.GA"
+    - "astro-ph.SR"
+    - "astro-ph.EP"
+    - "astro-ph.IM"
+  tier2_keywords:
+    - "central molecular zone"
+    - "CMZ"
+    - "galactic centre"
+    - "galactic center"
+    - "star formation"
+    - "planet formation"
+    - "extreme environment"
+  tier3_keywords:
+    - "cosmic origins of life"
+    - "prebiotic"
+    - "astrochemistry"
+    - "habitable"
+    - "biosignature"
+  papers_dir: "./papers"
+  diederik_email: ""
+
+markets:
+  crypto:
+    - "bitcoin"
+    - "ethereum"
+    - "allora-network"
+    - "researchcoin"
+  stocks:
+    - "^GSPC"
+    - "^FTSE"
+    - "^N225"
+  funds:
+    - "0P0001IHIS.L"
+
+github:
+  repos: []
+
+news:
+  feeds: []
+
+weather:
+  api_key: "${OPENWEATHER_API_KEY}"
+  locations:
+    - "West Kirby, UK"

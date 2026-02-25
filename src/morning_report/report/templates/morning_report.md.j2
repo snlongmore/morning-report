@@ -1,0 +1,99 @@
+# Morning Report — {{ day_name }}, {{ date }}
+
+*Generated at {{ generated_at }}*
+
+---
+
+{% if data.get('calendar') and data.calendar.status == 'ok' %}
+## Today's Schedule
+
+{% if data.calendar.today %}
+| Time | Event | Calendar | Location |
+|------|-------|----------|----------|
+{% for evt in data.calendar.today %}
+{% if evt.all_day %}| All day | **{{ evt.title }}** | {{ evt.calendar }} | {{ evt.location or '—' }} |
+{% else %}| {{ evt.start[11:16] }}–{{ evt.end[11:16] }} | **{{ evt.title }}** | {{ evt.calendar }} | {{ evt.location or '—' }} |
+{% endif %}
+{% endfor %}
+{% else %}
+No events scheduled for today.
+{% endif %}
+
+{% if data.calendar.upcoming %}
+### Upcoming (to {{ data.calendar.date_range.to }})
+
+{% for evt in data.calendar.upcoming %}
+{% if evt.all_day %}- **{{ evt.title }}** — {{ evt.start[:10] }} all day ({{ evt.calendar }})
+{% else %}- **{{ evt.title }}** — {{ evt.start[:10] }} {{ evt.start[11:16] }}–{{ evt.end[11:16] }} ({{ evt.calendar }})
+{% endif %}
+{% if evt.location %}  *{{ evt.location }}*
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% elif data.get('calendar') and data.calendar.status == 'error' %}
+## Today's Schedule
+
+> Calendar gatherer failed: {{ data.calendar.error }}
+
+{% endif %}
+---
+
+{% if data.get('email') and data.email.status == 'ok' %}
+## Email Summary
+
+**{{ data.email.total_unread }} unread** across {{ data.email.account_summary | length }} accounts
+
+{% for account, count in data.email.account_summary.items() %}
+- **{{ account }}**: {{ count }} unread
+{% endfor %}
+
+{% if data.email.needs_response %}
+### Needs Response
+
+{% for msg in data.email.needs_response %}
+- {% if msg._is_vip %}**[VIP]** {% endif %}**{{ msg.subject }}** — from {{ msg.sender }} ({{ msg.account }})
+{% endfor %}
+{% endif %}
+
+{% elif data.get('email') and data.email.status == 'error' %}
+## Email Summary
+
+> Email gatherer failed: {{ data.email.error }}
+
+{% endif %}
+---
+
+{% if data.get('ads') and data.ads.status == 'ok' %}
+## Academic Metrics (ADS)
+
+{{ data.ads | tojson(indent=2) }}
+
+{% endif %}
+{% if data.get('arxiv') and data.arxiv.status == 'ok' %}
+## arXiv Briefing
+
+{{ data.arxiv | tojson(indent=2) }}
+
+{% endif %}
+{% if data.get('markets') and data.markets.status == 'ok' %}
+## Markets
+
+{{ data.markets | tojson(indent=2) }}
+
+{% endif %}
+{% if data.get('github') and data.github.status == 'ok' %}
+## GitHub
+
+{{ data.github | tojson(indent=2) }}
+
+{% endif %}
+{% if data.get('weather') and data.weather.status == 'ok' %}
+## Weather
+
+{{ data.weather | tojson(indent=2) }}
+
+{% endif %}
+---
+
+*End of morning report.*
