@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -192,3 +193,245 @@ def run(
     save_gathered_data(results, briefings_dir)
     report = generate_report(results, output_dir=briefings_dir)
     typer.echo("\n" + report)
+
+
+@app.command()
+def export(
+    date: Optional[str] = typer.Option(
+        None, "--date", "-d",
+        help="Date to export (YYYY-MM-DD). Defaults to today.",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Export the markdown report to a Word document (.docx) via pandoc."""
+    _setup_logging(verbose)
+
+    date_str = date or datetime.now().strftime("%Y-%m-%d")
+    briefings_dir = get_project_root() / "briefings"
+    md_path = briefings_dir / f"{date_str}.md"
+
+    if not md_path.exists():
+        typer.echo(
+            f"No markdown report found for {date_str}. Run 'morning-report show' first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    from morning_report.report.exporter import export_docx
+    docx_path = export_docx(md_path)
+    typer.echo(f"Exported: {docx_path}")
+
+
+@app.command()
+def email(
+    date: Optional[str] = typer.Option(
+        None, "--date", "-d",
+        help="Date to email (YYYY-MM-DD). Defaults to today.",
+    ),
+    config_path: Optional[Path] = typer.Option(
+        None, "--config", "-c",
+        help="Path to config file.",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Email the morning report (.docx) with a summary body."""
+    _setup_logging(verbose)
+
+    date_str = date or datetime.now().strftime("%Y-%m-%d")
+    briefings_dir = get_project_root() / "briefings"
+    docx_path = briefings_dir / f"{date_str}.docx"
+    json_path = briefings_dir / f"{date_str}.json"
+
+    if not docx_path.exists():
+        typer.echo(
+            f"No .docx report found for {date_str}. Run 'morning-report export' first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    cfg = load_config(config_path)
+    email_cfg = cfg.get("automation", {}).get("email", {})
+
+    from morning_report.report.emailer import send_report
+    send_report(
+        docx_path=docx_path,
+        json_path=json_path,
+        recipient=email_cfg.get("recipient", "snlongmore@gmail.com"),
+        sender=email_cfg.get("sender", "snlongmore@gmail.com"),
+        app_password=email_cfg.get("app_password", ""),
+    )
+    typer.echo(f"Report emailed to {email_cfg.get('recipient', 'snlongmore@gmail.com')}")
+
+
+@app.command()
+def auto(
+    config_path: Optional[Path] = typer.Option(
+        None, "--config", "-c",
+        help="Path to config file.",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Run the full pipeline: gather → show → export → email."""
+    _setup_logging(verbose)
+    logger = logging.getLogger("morning_report")
+
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    briefings_dir = get_project_root() / "briefings"
+
+    # Step 1: Gather
+    typer.echo("=== Step 1/4: Gathering data ===")
+    cfg = load_config(config_path)
+    _register_gatherers()
+
+    results = {}
+    for name, cls in _GATHERER_CLASSES.items():
+        gatherer_config = cfg.get(name, {})
+        if name == "arxiv":
+            gatherer = cls(config=gatherer_config, ads_config=cfg.get("ads", {}))
+        else:
+            gatherer = cls(config=gatherer_config)
+        typer.echo(f"  Gathering: {name}...")
+        results[name] = gatherer.safe_gather()
+        status = results[name].get("status", "unknown")
+        if status == "ok":
+            typer.echo(f"    {name}: OK")
+        else:
+            typer.echo(f"    {name}: {status}")
+
+    from morning_report.report.generator import save_gathered_data, generate_report
+    save_gathered_data(results, briefings_dir)
+    typer.echo(f"  Data saved to {briefings_dir}/{date_str}.json")
+
+    # Step 2: Show (render markdown)
+    typer.echo("\n=== Step 2/4: Rendering markdown ===")
+    report = generate_report(results, output_dir=briefings_dir)
+    typer.echo(f"  Report written to {briefings_dir}/{date_str}.md")
+
+    # Step 3: Export to .docx
+    typer.echo("\n=== Step 3/4: Exporting to Word ===")
+    md_path = briefings_dir / f"{date_str}.md"
+    try:
+        from morning_report.report.exporter import export_docx
+        docx_path = export_docx(md_path)
+        typer.echo(f"  Exported: {docx_path}")
+    except (RuntimeError, FileNotFoundError) as e:
+        typer.echo(f"  Export failed: {e}", err=True)
+        typer.echo("  Report is still available as markdown.")
+        raise typer.Exit(1)
+
+    # Step 4: Email
+    typer.echo("\n=== Step 4/4: Emailing report ===")
+    email_cfg = cfg.get("automation", {}).get("email", {})
+    app_password = email_cfg.get("app_password", "")
+
+    if not app_password or app_password.startswith("${"):
+        typer.echo("  Skipping email: GMAIL_APP_PASSWORD not configured.")
+        typer.echo("  Report available locally:")
+        typer.echo(f"    Markdown: {briefings_dir}/{date_str}.md")
+        typer.echo(f"    Word:     {docx_path}")
+    else:
+        try:
+            from morning_report.report.emailer import send_report
+            json_path = briefings_dir / f"{date_str}.json"
+            send_report(
+                docx_path=docx_path,
+                json_path=json_path,
+                recipient=email_cfg.get("recipient", "snlongmore@gmail.com"),
+                sender=email_cfg.get("sender", "snlongmore@gmail.com"),
+                app_password=app_password,
+            )
+            typer.echo(f"  Report emailed to {email_cfg.get('recipient', 'snlongmore@gmail.com')}")
+        except Exception as e:
+            typer.echo(f"  Email failed: {e}", err=True)
+            typer.echo("  Report available locally:")
+            typer.echo(f"    Markdown: {briefings_dir}/{date_str}.md")
+            typer.echo(f"    Word:     {docx_path}")
+
+    typer.echo("\nDone.")
+
+
+_PLIST_LABEL = "com.snl.morning-report"
+_PLIST_SOURCE = get_project_root() / "config" / "com.snl.morning-report.plist"
+_PLIST_DEST = Path.home() / "Library" / "LaunchAgents" / "com.snl.morning-report.plist"
+
+
+@app.command(name="install-schedule")
+def install_schedule(
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Install the daily 05:00 schedule (launchd + pmset wake at 04:55)."""
+    _setup_logging(verbose)
+
+    # Symlink plist to ~/Library/LaunchAgents/
+    _PLIST_DEST.parent.mkdir(parents=True, exist_ok=True)
+    if _PLIST_DEST.exists() or _PLIST_DEST.is_symlink():
+        _PLIST_DEST.unlink()
+    _PLIST_DEST.symlink_to(_PLIST_SOURCE)
+    typer.echo(f"Plist symlinked: {_PLIST_DEST} → {_PLIST_SOURCE}")
+
+    # Load via launchctl
+    subprocess.run(["launchctl", "bootout", f"gui/{_get_uid()}", str(_PLIST_DEST)],
+                    capture_output=True)  # ignore error if not loaded
+    result = subprocess.run(
+        ["launchctl", "bootstrap", f"gui/{_get_uid()}", str(_PLIST_DEST)],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        typer.echo(f"launchctl bootstrap failed: {result.stderr.strip()}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"launchd job loaded: {_PLIST_LABEL}")
+
+    # Set pmset wake schedule (requires sudo)
+    typer.echo("\nSetting daily wake at 04:55 (requires sudo):")
+    result = subprocess.run(
+        ["sudo", "pmset", "repeat", "wakeorpoweron", "MTWRFSU", "04:55:00"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        typer.echo(f"pmset failed: {result.stderr.strip()}", err=True)
+        typer.echo("You can set it manually: sudo pmset repeat wakeorpoweron MTWRFSU 04:55:00")
+    else:
+        typer.echo("pmset wake scheduled: daily at 04:55")
+
+    typer.echo("\nSchedule installed. Check with:")
+    typer.echo(f"  launchctl list | grep {_PLIST_LABEL}")
+    typer.echo("  pmset -g sched")
+
+
+@app.command(name="uninstall-schedule")
+def uninstall_schedule(
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Remove the daily schedule (unload launchd job, clear pmset wake)."""
+    _setup_logging(verbose)
+
+    # Unload launchd job
+    if _PLIST_DEST.exists() or _PLIST_DEST.is_symlink():
+        subprocess.run(
+            ["launchctl", "bootout", f"gui/{_get_uid()}", str(_PLIST_DEST)],
+            capture_output=True, text=True,
+        )
+        _PLIST_DEST.unlink()
+        typer.echo(f"launchd job unloaded and plist removed: {_PLIST_DEST}")
+    else:
+        typer.echo("No plist found — launchd job was not installed.")
+
+    # Clear pmset repeat schedule (requires sudo)
+    typer.echo("\nClearing pmset wake schedule (requires sudo):")
+    result = subprocess.run(
+        ["sudo", "pmset", "repeat", "cancel"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        typer.echo(f"pmset cancel failed: {result.stderr.strip()}", err=True)
+        typer.echo("You can clear it manually: sudo pmset repeat cancel")
+    else:
+        typer.echo("pmset wake schedule cleared.")
+
+    typer.echo("\nSchedule removed.")
+
+
+def _get_uid() -> int:
+    """Get the current user's UID for launchctl domain targeting."""
+    import os
+    return os.getuid()
