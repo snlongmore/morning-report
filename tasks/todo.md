@@ -57,7 +57,22 @@
 - Weather gracefully skips without API key; news raises if feedparser missing
 
 ## Sprint 4: Intelligence Layer + Skill
-- [ ] Claude Code skill (`/morning-report`)
-- [ ] Response drafting
-- [ ] Meeting prep (Fireflies)
-- [ ] Priority ranking (cross-source urgency)
+
+- [x] Claude Code skill (`/morning-report`) — installed to `~/.claude/skills/morning-report/skill.md`
+- [x] MCP service discovery: Slack (Allora), Linear (Research + Quant teams), Jira (BolgiaTen: EOVT1, IF), Fireflies
+- [x] Response drafting — built into skill Step 5 (drafts responses for high-priority items)
+- [x] Meeting prep — built into skill Step 6 (cross-references calendar with Fireflies, Slack, Linear, Jira)
+- [x] Priority ranking — built into skill Step 4 (cross-source urgency scoring: 5-point scale)
+- [x] Config updated with MCP service identifiers (Slack user ID, Linear team IDs, Jira cloud ID)
+- [x] Project CLAUDE.md updated with skill documentation
+- [x] Settings updated with MCP tool permissions
+
+### Sprint 4 Notes
+- Skill orchestrates two execution modes: full (CLI + MCP) and quick (CLI only)
+- Priority scoring: calendar urgency (+5), overdue tickets (+5), VIP messages (+4), blocking PRs (+4), high-priority tickets (+3)
+- Slack queries: DMs (to:me), mentions (@user), with thread drill-down for important messages
+- Linear: focuses on Research and Quant teams. Issues filtered by state (in-progress, unstarted)
+- Jira: BolgiaTen cloud ID `deafb2cc-bf29-4c9c-a266-3f8f3ef826e0`. Projects: EOVT1 (EO-VTI), IF (Ideas Funnel)
+- Fireflies: connected via snl@bolgiaten.com, no transcripts yet — gracefully skips
+- All MCP sources are optional — skill degrades gracefully if any service is unavailable
+- Skill does NOT send messages automatically — only drafts responses for user review

@@ -31,6 +31,30 @@ morning-report gather --only email
 morning-report gather --only calendar
 ```
 
+## Claude Code Skill
+
+The `/morning-report` skill generates an enhanced briefing with MCP-powered intelligence:
+
+```
+/morning-report          # Full briefing (CLI + Slack + Linear + Jira + Fireflies)
+/morning-report --quick  # CLI data only, skip MCP
+```
+
+The skill:
+1. Runs `morning-report gather` (Python CLI) for local apps + REST APIs
+2. Queries MCP services: Slack (DMs, mentions), Linear (assigned issues), Jira (BolgiaTen tickets), Fireflies (meeting transcripts)
+3. Synthesizes all data with priority scoring
+4. Writes an enhanced briefing to `briefings/YYYY-MM-DD.md`
+5. Presents a concise summary with top action items
+
+Skill source: `skills/morning-report.md` (installed to `~/.claude/skills/morning-report/skill.md`)
+
+### MCP Services
+- **Slack** (Allora workspace): DMs, mentions, channel activity. User ID: `U09RTDE4ZNF`
+- **Linear** (Allora): Research + Quant teams. Issues, cycles, projects
+- **Jira** (BolgiaTen): `bolgiaten.atlassian.net`. Projects: EOVT1, IF
+- **Fireflies**: Meeting transcripts and summaries for meeting prep
+
 ## Testing
 ```bash
 pytest tests/

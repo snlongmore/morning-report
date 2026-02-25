@@ -104,3 +104,20 @@ weather:
   api_key: "${OPENWEATHER_API_KEY}"
   locations:
     - "West Kirby, UK"
+
+# MCP service configuration (used by /morning-report skill)
+mcp:
+  slack:
+    user_id: "U09RTDE4ZNF"
+  linear:
+    teams:
+      - name: "Research"
+        id: "557d8bd6-548b-4265-b4f9-2ad37164d6e3"
+      - name: "Quant"
+        id: "d19917a0-53fc-451b-927a-980c6efaf1ee"
+  jira:
+    cloud_id: "deafb2cc-bf29-4c9c-a266-3f8f3ef826e0"
+    site: "bolgiaten.atlassian.net"
+    projects:
+      - "EOVT1"    # EO-VTI (Earth Observation)
+      - "IF"        # Ideas Funnel
