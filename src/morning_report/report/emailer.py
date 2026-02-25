@@ -97,12 +97,16 @@ def _build_summary(data: dict) -> str:
         else:
             lines.append(f"Calendar: {n_today} events today")
 
-    # Email
+    # Email — accounts is a dict mapping account name to list of messages
     email = data.get("email", {})
     if email.get("status") == "ok":
-        accounts = email.get("accounts", [])
-        total_unread = sum(a.get("unread_count", 0) for a in accounts)
-        n_accounts = len(accounts)
+        accounts = email.get("accounts", {})
+        if isinstance(accounts, dict):
+            total_unread = sum(len(msgs) for msgs in accounts.values())
+            n_accounts = len(accounts)
+        else:
+            total_unread = 0
+            n_accounts = 0
         lines.append(f"Email: {total_unread} unread across {n_accounts} accounts")
 
     # arXiv

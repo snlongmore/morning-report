@@ -27,10 +27,10 @@ SAMPLE_DATA = {
     },
     "email": {
         "status": "ok",
-        "accounts": [
-            {"name": "gmail", "unread_count": 12},
-            {"name": "work", "unread_count": 5},
-        ],
+        "accounts": {
+            "gmail": [{"sender": "a@b.com", "subject": "hi"}] * 12,
+            "work": [{"sender": "c@d.com", "subject": "hello"}] * 5,
+        },
     },
     "arxiv": {
         "status": "ok",
