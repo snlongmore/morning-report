@@ -9,7 +9,7 @@
 - [x] Calendar gatherer (macOS Calendar via Swift/EventKit — replaced AppleScript due to timeout)
 - [x] Report generator (Jinja2 template with HH:MM time formatting)
 - [x] CLI (Typer: gather, show, run commands)
-- [ ] ADS token setup documentation
+- [x] ADS token setup documentation (instructions provided; calendar dedup implemented)
 - [x] Verification: email (17 unread / 4 accounts) + calendar (20 events / 3 days) — live-tested
 
 ### Sprint 1 Notes

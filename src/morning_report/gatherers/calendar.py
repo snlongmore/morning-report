@@ -65,6 +65,7 @@ class CalendarGatherer(BaseGatherer):
             return {"today": [], "upcoming": [], "total_events": 0}
 
         events = json.loads(raw)
+        events = self._deduplicate(events)
 
         # Partition into today vs upcoming
         today = datetime.now()
@@ -89,3 +90,15 @@ class CalendarGatherer(BaseGatherer):
                 "to": (today + timedelta(days=self._lookahead)).strftime("%Y-%m-%d"),
             },
         }
+
+    @staticmethod
+    def _deduplicate(events: list[dict]) -> list[dict]:
+        """Remove duplicate events that appear in multiple calendars."""
+        seen: set[tuple[str, str, str]] = set()
+        unique = []
+        for evt in events:
+            key = (evt.get("title", ""), evt.get("start", ""), evt.get("end", ""))
+            if key not in seen:
+                seen.add(key)
+                unique.append(evt)
+        return unique

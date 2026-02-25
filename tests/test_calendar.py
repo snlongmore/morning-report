@@ -103,3 +103,36 @@ class TestCalendarGatherer:
 
             with pytest.raises(RuntimeError, match="Calendar access denied"):
                 g.gather()
+
+    def test_gather_deduplicates_events(self):
+        today_str = datetime.now().strftime("%Y-%m-%d")
+
+        fake_output = json.dumps([
+            {
+                "calendar": "ARI colloquia",
+                "title": "ARI Seminar",
+                "start": f"{today_str}T14:00:00",
+                "end": f"{today_str}T15:00:00",
+                "location": "Room 123",
+                "notes": "",
+                "all_day": False,
+            },
+            {
+                "calendar": "ARI Seminars",
+                "title": "ARI Seminar",
+                "start": f"{today_str}T14:00:00",
+                "end": f"{today_str}T15:00:00",
+                "location": "",
+                "notes": "",
+                "all_day": False,
+            },
+        ])
+
+        with patch("morning_report.gatherers.calendar.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=fake_output, stderr="")
+            g = CalendarGatherer()
+            result = g.gather()
+
+        assert result["total_events"] == 1
+        assert len(result["today"]) == 1
+        assert result["today"][0]["calendar"] == "ARI colloquia"
