@@ -29,9 +29,13 @@ def _register_gatherers():
         return
     from morning_report.gatherers.email import EmailGatherer
     from morning_report.gatherers.calendar import CalendarGatherer
+    from morning_report.gatherers.ads import ADSGatherer
+    from morning_report.gatherers.arxiv import ArxivGatherer
 
     _GATHERER_CLASSES["email"] = EmailGatherer
     _GATHERER_CLASSES["calendar"] = CalendarGatherer
+    _GATHERER_CLASSES["ads"] = ADSGatherer
+    _GATHERER_CLASSES["arxiv"] = ArxivGatherer
 
 
 def _setup_logging(verbose: bool = False):
@@ -84,9 +88,12 @@ def gather(
     results = {}
     for name in names:
         cls = _GATHERER_CLASSES[name]
-        # Pass the relevant config section to each gatherer
         gatherer_config = cfg.get(name, {})
-        gatherer = cls(config=gatherer_config)
+        # ArxivGatherer also needs the ADS config for Tier 1 citation checking
+        if name == "arxiv":
+            gatherer = cls(config=gatherer_config, ads_config=cfg.get("ads", {}))
+        else:
+            gatherer = cls(config=gatherer_config)
         typer.echo(f"Gathering: {name}...")
         results[name] = gatherer.safe_gather()
         status = results[name].get("status", "unknown")
@@ -161,7 +168,10 @@ def run(
     results = {}
     for name, cls in _GATHERER_CLASSES.items():
         gatherer_config = cfg.get(name, {})
-        gatherer = cls(config=gatherer_config)
+        if name == "arxiv":
+            gatherer = cls(config=gatherer_config, ads_config=cfg.get("ads", {}))
+        else:
+            gatherer = cls(config=gatherer_config)
         typer.echo(f"Gathering: {name}...")
         results[name] = gatherer.safe_gather()
         status = results[name].get("status", "unknown")

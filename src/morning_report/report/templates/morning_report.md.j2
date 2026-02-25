@@ -64,18 +64,102 @@ No events scheduled for today.
 {% endif %}
 ---
 
-{% if data.get('ads') and data.ads.status == 'ok' %}
-## Academic Metrics (ADS)
-
-{{ data.ads | tojson(indent=2) }}
-
-{% endif %}
 {% if data.get('arxiv') and data.arxiv.status == 'ok' %}
 ## arXiv Briefing
 
-{{ data.arxiv | tojson(indent=2) }}
+**{{ data.arxiv.total_new }}** new papers across {{ data.arxiv.categories_searched | join(', ') }}
+
+{% if data.arxiv.tiers['1'] %}
+### Tier 1 — Cites Your Work
+
+{% for p in data.arxiv.tiers['1'] %}
+- **{{ p.title }}** — {{ p.authors[:3] | join(', ') }}{% if p.author_count > 3 %} +{{ p.author_count - 3 }}{% endif %}
+  [{{ p.arxiv_id }}]({{ p.abs_url }}) | {{ p.primary_category }}
+{% endfor %}
+{% endif %}
+
+{% if data.arxiv.tiers['2'] %}
+### Tier 2 — Core Research
+
+{% for p in data.arxiv.tiers['2'] %}
+- **{{ p.title }}** — {{ p.authors[:3] | join(', ') }}{% if p.author_count > 3 %} +{{ p.author_count - 3 }}{% endif %}
+  [{{ p.arxiv_id }}]({{ p.abs_url }}) | {{ p.primary_category }} | Keywords: {{ p.matched_keywords | join(', ') }}
+{% endfor %}
+{% endif %}
+
+{% if data.arxiv.tiers['3'] %}
+### Tier 3 — COOL Project
+
+{% for p in data.arxiv.tiers['3'] %}
+- **{{ p.title }}** — {{ p.authors[:3] | join(', ') }}{% if p.author_count > 3 %} +{{ p.author_count - 3 }}{% endif %}
+  [{{ p.arxiv_id }}]({{ p.abs_url }}) | {{ p.primary_category }} | Keywords: {{ p.matched_keywords | join(', ') }}
+{% endfor %}
+{% endif %}
+
+{% if not data.arxiv.tiers['1'] and not data.arxiv.tiers['2'] and not data.arxiv.tiers['3'] %}
+No papers matched your research interests today.
+{% endif %}
+
+{% if data.arxiv.pdfs_downloaded %}
+*{{ data.arxiv.pdfs_downloaded }} PDFs downloaded to papers/*
+{% endif %}
+{% if not data.arxiv.ads_citations_available %}
+*Note: ADS citation checking unavailable (no API token). Tier 1 classification disabled.*
+{% endif %}
+
+{% elif data.get('arxiv') and data.arxiv.status == 'error' %}
+## arXiv Briefing
+
+> arXiv gatherer failed: {{ data.arxiv.error }}
 
 {% endif %}
+---
+
+{% if data.get('ads') and data.ads.status == 'ok' %}
+## Academic Metrics (ADS)
+
+**{{ data.ads.author }}** — {{ data.ads.num_bibcodes }} papers in ADS
+
+| Metric | Value |
+|--------|-------|
+| h-index | {{ data.ads.indicators.h }} |
+| g-index | {{ data.ads.indicators.g }} |
+| m-index | {{ data.ads.indicators.m }} |
+| i10-index | {{ data.ads.indicators.i10 }} |
+| i100-index | {{ data.ads.indicators.i100 }} |
+| tori | {{ data.ads.indicators.tori }} |
+| read10 | {{ data.ads.indicators.read10 }} |
+
+**Citations:** {{ data.ads.citation_stats.total_citations }} total ({{ data.ads.citation_stats.citing_papers }} citing papers, {{ data.ads.citation_stats.self_citations }} self-citations)
+**Reads:** {{ data.ads.basic_stats.total_reads }} total ({{ data.ads.basic_stats.recent_reads }} recent)
+
+{% if data.ads.deltas and data.ads.deltas.get('indicators') %}
+### Changes since {{ data.ads.deltas.compared_to }}
+
+{% for key, val in data.ads.deltas.indicators.items() %}
+- **{{ key }}**: {{ val.previous }} → {{ val.current }} ({{ '+' if val.delta > 0 else '' }}{{ val.delta }})
+{% endfor %}
+{% endif %}
+{% if data.ads.deltas and data.ads.deltas.get('citations') %}
+{% for key, val in data.ads.deltas.citations.items() %}
+- **{{ key }}**: {{ val.previous }} → {{ val.current }} ({{ '+' if val.delta > 0 else '' }}{{ val.delta }})
+{% endfor %}
+{% endif %}
+
+{% elif data.get('ads') and data.ads.status == 'skipped' %}
+## Academic Metrics (ADS)
+
+> ADS gatherer skipped: {{ data.ads.reason }}
+> Set ADS_API_TOKEN or add api_token to config/config.yaml.
+
+{% elif data.get('ads') and data.ads.status == 'error' %}
+## Academic Metrics (ADS)
+
+> ADS gatherer failed: {{ data.ads.error }}
+
+{% endif %}
+---
+
 {% if data.get('markets') and data.markets.status == 'ok' %}
 ## Markets
 
