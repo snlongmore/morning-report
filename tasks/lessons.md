@@ -11,3 +11,6 @@ AppleScript's `every event of cal whose start date >= today` iterates ALL events
 
 ## 2026-02-25: EventKit requires explicit permission grant on first run
 The Swift calendar helper prompts for calendar access permission on first run. This is a one-time macOS permission grant. If it fails silently, check System Settings > Privacy & Security > Calendars.
+
+## 2026-02-25: Use string keys for tier dicts that pass through JSON
+When a Python dict with integer keys (e.g. `{1: [...], 2: [...]}`) is serialised to JSON and loaded back, keys become strings (`{"1": [...], "2": [...]}`). Jinja2 templates that check `data.tiers['1']` will fail if the dict has integer keys. Always use string keys in dicts that may be JSON round-tripped — especially anything going into the report template.

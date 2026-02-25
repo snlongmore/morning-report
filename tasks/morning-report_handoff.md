@@ -1,64 +1,80 @@
-# Morning Report — Sprint 1 Handoff
+# Morning Report — Sprint 2 Handoff
 
-> **Written:** 2026-02-25 10:40 UTC | **Branch:** main (no commits yet — initial commit pending)
+> **Written:** 2026-02-25 11:05 UTC | **Branch:** main | **Commits:** 2 (c8b61e0, 0dc9f8b)
 
 ## Current State
 
-Sprint 1 is complete: project scaffolding, config system, email gatherer, calendar gatherer, report generator, CLI, and tests (21 passing). The system gathers live data from Apple Mail (17 unread across 4 accounts) and macOS Calendar (20 events over 3 days) and produces a structured markdown morning briefing. No commits have been made yet — all files are staged and ready for initial commit.
+Sprints 1 and 2 are complete. The system gathers live data from Apple Mail (7 accounts), macOS Calendar (12 calendars), and arXiv (4 astro-ph categories), classifies papers into research-relevance tiers, downloads PDFs, and produces a structured markdown morning briefing. ADS metrics gathering is built but disabled pending API token setup. 36 tests passing.
+
+**Working gatherers:** email, calendar, arxiv
+**Built but needs token:** ads (gracefully skips)
+**Not yet built:** markets, github, news, weather
 
 ## Decisions Made
 
-- **AppleScript unified inbox** — per-account `inbox of acct` fails on Exchange/IMAP accounts. Switched to application-level `inbox` which covers all 7 accounts.
-- **No message body extraction** — fetching `content of msg` via AppleScript causes 60s+ timeouts. Subject + sender is sufficient for morning triage; the Claude skill layer (Sprint 4) will handle deeper analysis.
-- **Swift/EventKit for calendar** — AppleScript Calendar `whose start date >= ...` times out on ~35 calendars. Replaced entirely with a Swift helper (`src/morning_report/helpers/calendar_events.swift`) that calls EventKit directly — returns results instantly.
-- **src layout** — `src/morning_report/` with hatchling build backend, editable install via `uv pip install -e ".[dev]"`.
+### Sprint 1
+- **AppleScript unified inbox** — per-account `inbox of acct` fails on Exchange/IMAP. Use application-level `inbox`, group by `account of mailbox of msg`.
+- **No message body extraction** — `content of msg` causes 60s+ timeouts. Subject + sender sufficient for triage.
+- **Swift/EventKit for calendar** — AppleScript `whose start date` times out on ~35 calendars. Swift helper at `helpers/calendar_events.swift` calls EventKit directly (instant).
+- **src layout** — `src/morning_report/` with hatchling, editable install via `uv pip install -e ".[dev]"`.
+
+### Sprint 2
+- **ADS 2-step workflow** — search `/v1/search/query` for author bibcodes, then POST to `/v1/metrics` for aggregate indicators.
+- **ADS delta tracking** — `briefings/ads_history.json` stores daily snapshots; deltas computed against most recent previous entry.
+- **arXiv native date filtering** — `submittedDate:[YYYYMMDD TO YYYYMMDD]` avoids fetching entire history.
+- **Tier dict string keys** — must use `"1"`, `"2"`, `"3"` (not ints) to survive JSON round-trip for Jinja2.
+- **Tier 1 citation lag** — new arXiv papers take days to enter ADS. We query ADS for citations from last 7 days, not just today.
+- **PDF downloads for Tier 1+2 only** — Tier 3 (COOL) gets listed but not downloaded by default.
 
 ## Files Modified
 
 | File | Change |
 |------|--------|
-| `pyproject.toml` | Project config: typer, pyyaml, jinja2, requests deps; hatchling build |
-| `CLAUDE.md` | Project instructions for Claude Code sessions |
-| `.gitignore` | Ignores briefings/, papers/, config.yaml, .venv, __pycache__ |
-| `config/config.example.yaml` | Full config template with all 7 accounts, 12 calendars, arXiv categories |
-| `config/config.yaml` | Live config (gitignored, copy of example) |
-| `src/morning_report/__init__.py` | Package init, version 0.1.0 |
-| `src/morning_report/config.py` | YAML loader with `${ENV_VAR}` expansion, project root helper |
-| `src/morning_report/cli.py` | Typer CLI: `gather`, `show`, `run` commands with `--only` filter |
-| `src/morning_report/gatherers/base.py` | BaseGatherer ABC: `gather()`, `safe_gather()`, `is_available()` |
-| `src/morning_report/gatherers/email.py` | Apple Mail via AppleScript (unified inbox), VIP flagging, response heuristic |
-| `src/morning_report/gatherers/calendar.py` | macOS Calendar via Swift/EventKit, today/upcoming partitioning |
-| `src/morning_report/helpers/calendar_events.swift` | Swift EventKit helper — queries named calendars, returns JSON |
-| `src/morning_report/report/generator.py` | Jinja2 report assembly, JSON data caching |
-| `src/morning_report/report/templates/morning_report.md.j2` | Markdown template with HH:MM times, all-day handling |
-| `tests/test_config.py` | 5 tests: env var expansion, config loading, fallback |
-| `tests/test_email.py` | 9 tests: response heuristic, parsing, VIP flagging, empty inbox |
-| `tests/test_calendar.py` | 7 tests: parsing, all-day events, error handling, access denied |
+| `src/morning_report/gatherers/ads.py` | ADS metrics: bibcode search, /v1/metrics POST, delta tracking |
+| `src/morning_report/gatherers/arxiv.py` | arXiv paper fetch, Atom XML parsing, tier integration, PDF download |
+| `src/morning_report/arxiv/classifier.py` | Tier 1/2/3 classification: citations, keyword matching |
+| `src/morning_report/arxiv/paper_handler.py` | PDF download to `papers/YYYY-MM-DD/` |
+| `src/morning_report/cli.py` | Registered ads + arxiv gatherers, arxiv gets ads_config for Tier 1 |
+| `src/morning_report/report/templates/morning_report.md.j2` | Structured arXiv + ADS sections in report |
+| `tests/test_ads.py` | 6 tests: availability, metrics parsing, delta computation |
+| `tests/test_arxiv.py` | 9 tests: classifier tiers, XML parsing, gatherer integration |
+| `tasks/todo.md` | Sprint 2 items checked off |
 
 ## What's Been Tried
 
 | Approach | Outcome |
 |----------|---------|
-| AppleScript `inbox of acct` per-account email | Failed — `-1728` error on Exchange accounts |
-| AppleScript `content of msg` for snippets | Failed — 60s timeout on unified inbox |
-| AppleScript Calendar `whose start date >= ...` | Failed — AppleEvent timeout (`-1712`) on large calendars |
-| Swift EventKit for calendar | Worked perfectly — instant results, ISO date format |
-| Application-level unified `inbox` for email | Worked — finds all accounts, ~45s with no body extraction |
+| AppleScript `inbox of acct` per-account email | Failed — `-1728` on Exchange |
+| AppleScript `content of msg` for snippets | Failed — 60s timeout |
+| AppleScript Calendar `whose start date >= ...` | Failed — `-1712` timeout |
+| Swift EventKit for calendar | Worked — instant, ISO dates |
+| Application-level unified `inbox` for email | Worked — all 7 accounts |
+| arXiv API date-range query | Worked — 41 papers fetched for one day |
+| arXiv tier classification (keyword matching) | Worked — 7 Tier 2, 1 Tier 3 correctly classified |
+| Integer keys in tier dict | Failed — Jinja2 template couldn't match after JSON round-trip |
+| String keys `"1"/"2"/"3"` in tier dict | Worked — consistent across direct and JSON paths |
 
 ## Next Steps
 
-1. **Get ADS API token** — User retrieves from https://ui.adsabs.harvard.edu/user/settings/token, sets as `ADS_API_TOKEN` env var
-2. **Sprint 2: ADS gatherer** — `gatherers/ads.py`: query `api.adsabs.harvard.edu/v1/metrics` for "longmore, s.n.", track deltas in `briefings/ads_history.json`
-3. **Sprint 2: arXiv gatherer** — `gatherers/arxiv.py` + `arxiv/classifier.py`: fetch new papers from astro-ph.{GA,SR,EP,IM}, tier classification (Tier 1: cites my work via ADS, Tier 2: CMZ/star formation keywords, Tier 3: COOL topics)
-4. **Sprint 3: Markets** — CoinGecko (BTC, ETH, ALLO, RSC) + yfinance (S&P, FTSE, Nikkei, VAFTGAG)
+1. **Sprint 3: Markets gatherer** — `gatherers/markets.py`
+   - CoinGecko API (no auth): BTC, ETH, `allora-network`, `researchcoin` — verify ALLO/RSC IDs
+   - yfinance: `^GSPC` (S&P 500), `^FTSE`, `^N225`, `0P0001IHIS.L` (VAFTGAG — verify ticker)
+   - Add `yfinance` to `[project.optional-dependencies.markets]` (already in pyproject.toml)
+2. **Sprint 3: GitHub gatherer** — `gatherers/github.py` via `gh` CLI or PyGithub
+3. **Sprint 3: News gatherer** — `gatherers/news.py` via feedparser (RSS)
+4. **Sprint 3: Weather gatherer** — `gatherers/weather.py` via OpenWeatherMap
 5. **Sprint 4: Claude Code skill** — `/morning-report` wrapping CLI + MCP (Slack, Linear, Jira, Fireflies)
+6. **ADS token** — user retrieves from https://ui.adsabs.harvard.edu/user/settings/token, sets `ADS_API_TOKEN`
 
 ## Blockers / Open Questions
 
-- **ADS API token** — needed before Sprint 2 ADS gatherer can be tested
-- **VAFTGAG yfinance ticker** — need to verify exact identifier for Vanguard FTSE Global All Cap
-- **ALLO/RSC CoinGecko IDs** — need to verify `allora-network` and `researchcoin` IDs
-- **Duplicate calendar events** — some events appear in multiple calendars (e.g. ARI Seminar in both "ARI colloquia" and "ARI Seminars"). Consider deduplication by title+time.
+- **ADS API token** — needed for ADS metrics + arXiv Tier 1 citation checking
+- **VAFTGAG yfinance ticker** — verify exact identifier for Vanguard FTSE Global All Cap (`0P0001IHIS.L`?)
+- **ALLO/RSC CoinGecko IDs** — verify `allora-network` and `researchcoin` exist on CoinGecko
+- **Duplicate calendar events** — ARI Seminar appears in both "ARI colloquia" and "ARI Seminars"; consider dedup
+- **GitHub repos list** — user needs to configure which repos to monitor
+- **News RSS feeds** — need to curate feeds for shipping, AI/crypto, astronomy
+- **OpenWeatherMap API key** — needed for weather gatherer
 
 ## Key File Locations
 
@@ -70,9 +86,14 @@ Sprint 1 is complete: project scaffolding, config system, email gatherer, calend
 | Email gatherer | `src/morning_report/gatherers/email.py` |
 | Calendar gatherer | `src/morning_report/gatherers/calendar.py` |
 | Swift calendar helper | `src/morning_report/helpers/calendar_events.swift` |
+| ADS gatherer | `src/morning_report/gatherers/ads.py` |
+| arXiv gatherer | `src/morning_report/gatherers/arxiv.py` |
+| Tier classifier | `src/morning_report/arxiv/classifier.py` |
+| PDF handler | `src/morning_report/arxiv/paper_handler.py` |
 | Report generator | `src/morning_report/report/generator.py` |
 | Jinja2 template | `src/morning_report/report/templates/morning_report.md.j2` |
 | Config template | `config/config.example.yaml` |
-| Live config (gitignored) | `config/config.yaml` |
 | Generated reports | `briefings/YYYY-MM-DD.md` |
+| Downloaded papers | `papers/YYYY-MM-DD/` |
+| ADS history | `briefings/ads_history.json` |
 | Implementation tracker | `tasks/todo.md` |
