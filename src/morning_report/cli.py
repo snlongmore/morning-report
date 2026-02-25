@@ -31,11 +31,19 @@ def _register_gatherers():
     from morning_report.gatherers.calendar import CalendarGatherer
     from morning_report.gatherers.ads import ADSGatherer
     from morning_report.gatherers.arxiv import ArxivGatherer
+    from morning_report.gatherers.markets import MarketsGatherer
+    from morning_report.gatherers.github import GitHubGatherer
+    from morning_report.gatherers.news import NewsGatherer
+    from morning_report.gatherers.weather import WeatherGatherer
 
     _GATHERER_CLASSES["email"] = EmailGatherer
     _GATHERER_CLASSES["calendar"] = CalendarGatherer
     _GATHERER_CLASSES["ads"] = ADSGatherer
     _GATHERER_CLASSES["arxiv"] = ArxivGatherer
+    _GATHERER_CLASSES["markets"] = MarketsGatherer
+    _GATHERER_CLASSES["github"] = GitHubGatherer
+    _GATHERER_CLASSES["news"] = NewsGatherer
+    _GATHERER_CLASSES["weather"] = WeatherGatherer
 
 
 def _setup_logging(verbose: bool = False):

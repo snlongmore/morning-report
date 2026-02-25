@@ -37,10 +37,24 @@
 - Tier 1 has inherent lag: new arXiv papers take days to appear in ADS → search ADS for last 7 days
 
 ## Sprint 3: Markets + External
-- [ ] Markets gatherer (CoinGecko + yfinance)
-- [ ] GitHub gatherer (notifications, PRs, issues)
-- [ ] News gatherer (RSS)
-- [ ] Weather gatherer (OpenWeatherMap)
+
+- [x] Markets gatherer (CoinGecko batched /simple/price + yfinance for stocks/indices)
+- [x] GitHub gatherer (gh CLI: notifications, PRs needing review, assigned issues)
+- [x] News gatherer (RSS via feedparser: Astronomy, AI/ML, Shipping, Crypto)
+- [x] Weather gatherer (OpenWeatherMap current + 24h forecast, known coords for West Kirby)
+- [x] CLI registration (all 8 gatherers)
+- [x] Report template (full sections for markets, github, news, weather)
+- [x] Config updated (corrected CoinGecko IDs, yfinance tickers, news feeds)
+- [x] Tests (75 total: +39 for new gatherers)
+- [x] Verification: full end-to-end run — all gatherers working live
+
+### Sprint 3 Notes
+- CoinGecko ID for Allora is `allora` (not `allora-network`)
+- yfinance proxy for Vanguard FTSE Global All Cap: `VWRL.L` (Vanguard FTSE All-World ETF)
+- Weather uses known coordinates for West Kirby to avoid geocoding API calls
+- GitHub gatherer uses `gh` CLI with JSON output for notifications, PRs, issues
+- News gatherer groups by category with configurable max per category
+- Weather gracefully skips without API key; news raises if feedparser missing
 
 ## Sprint 4: Intelligence Layer + Skill
 - [ ] Claude Code skill (`/morning-report`)

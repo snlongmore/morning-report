@@ -74,20 +74,31 @@ markets:
   crypto:
     - "bitcoin"
     - "ethereum"
-    - "allora-network"
-    - "researchcoin"
+    - "allora"          # ALLO — CoinGecko ID (not "allora-network")
+    - "researchcoin"    # RSC
   stocks:
-    - "^GSPC"
-    - "^FTSE"
-    - "^N225"
+    - "^GSPC"           # S&P 500
+    - "^FTSE"           # FTSE 100
+    - "^N225"           # Nikkei 225
   funds:
-    - "0P0001IHIS.L"
+    - "VWRL.L"          # Vanguard FTSE All-World ETF (proxy for Global All Cap)
 
 github:
   repos: []
 
 news:
-  feeds: []
+  feeds:
+    Astronomy:
+      - "https://www.eso.org/public/news/feed/"
+      - "https://www.nasa.gov/rss/dyn/breaking_news.rss"
+    AI/ML:
+      - "https://news.ycombinator.com/rss"
+    Shipping:
+      - "https://gcaptain.com/feed/"
+      - "https://splash247.com/feed/"
+    Crypto:
+      - "https://cointelegraph.com/rss"
+  max_per_category: 5
 
 weather:
   api_key: "${OPENWEATHER_API_KEY}"

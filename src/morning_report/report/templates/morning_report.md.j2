@@ -64,6 +64,41 @@ No events scheduled for today.
 {% endif %}
 ---
 
+{% if data.get('github') and data.github.status == 'ok' %}
+## GitHub
+
+{% if data.github.notification_count %}
+**{{ data.github.notification_count }}** unread notifications
+{% endif %}
+
+{% if data.github.prs_to_review %}
+### PRs Needing Review
+
+{% for pr in data.github.prs_to_review %}
+- [**{{ pr.title }}**]({{ pr.url }}) — {{ pr.repository.nameWithOwner if pr.repository else '' }}
+{% endfor %}
+{% endif %}
+
+{% if data.github.assigned_issues %}
+### Assigned Issues
+
+{% for issue in data.github.assigned_issues %}
+- [**{{ issue.title }}**]({{ issue.url }}) — {{ issue.repository.nameWithOwner if issue.repository else '' }}
+{% endfor %}
+{% endif %}
+
+{% if not data.github.notification_count and not data.github.prs_to_review and not data.github.assigned_issues %}
+No GitHub activity.
+{% endif %}
+
+{% elif data.get('github') and data.github.status == 'error' %}
+## GitHub
+
+> GitHub gatherer failed: {{ data.github.error }}
+
+{% endif %}
+---
+
 {% if data.get('arxiv') and data.arxiv.status == 'ok' %}
 ## arXiv Briefing
 
@@ -115,6 +150,45 @@ No papers matched your research interests today.
 {% endif %}
 ---
 
+{% if data.get('markets') and data.markets.status == 'ok' %}
+## Markets
+
+{% if data.markets.crypto %}
+### Crypto
+
+| Token | Price (USD) | 24h Change |
+|-------|-------------|------------|
+{% for id, info in data.markets.crypto.items() %}
+{% if info.price_usd is defined %}| **{{ id }}** | ${{ "%.2f" | format(info.price_usd) if info.price_usd >= 1 else "%.6f" | format(info.price_usd) }} | {{ "%.1f" | format(info.change_24h_pct) }}% |
+{% else %}| **{{ id }}** | {{ info.error }} | — |
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if data.markets.stocks %}
+### Indices & Funds
+
+| Ticker | Price | Change |
+|--------|-------|--------|
+{% for ticker, info in data.markets.stocks.items() %}
+{% if info.price is defined %}| **{{ ticker }}** | {{ "%.2f" | format(info.price) }} {{ info.currency }} | {{ "%.1f" | format(info.change_pct) if info.change_pct is not none else '—' }}% |
+{% else %}| **{{ ticker }}** | {{ info.error }} | — |
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if data.markets.stocks_error %}
+> Stocks/indices unavailable: {{ data.markets.stocks_error }}
+{% endif %}
+
+{% elif data.get('markets') and data.markets.status == 'error' %}
+## Markets
+
+> Markets gatherer failed: {{ data.markets.error }}
+
+{% endif %}
+---
+
 {% if data.get('ads') and data.ads.status == 'ok' %}
 ## Academic Metrics (ADS)
 
@@ -160,22 +234,60 @@ No papers matched your research interests today.
 {% endif %}
 ---
 
-{% if data.get('markets') and data.markets.status == 'ok' %}
-## Markets
+{% if data.get('news') and data.news.status == 'ok' %}
+## News Digest
 
-{{ data.markets | tojson(indent=2) }}
+{% for category, articles in data.news.categories.items() %}
+{% if articles %}
+### {{ category }}
+
+{% for article in articles %}
+- [{{ article.title }}]({{ article.link }}) — *{{ article.source }}*
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+{% elif data.get('news') and data.news.status == 'error' %}
+## News Digest
+
+> News gatherer failed: {{ data.news.error }}
 
 {% endif %}
-{% if data.get('github') and data.github.status == 'ok' %}
-## GitHub
+---
 
-{{ data.github | tojson(indent=2) }}
-
-{% endif %}
 {% if data.get('weather') and data.weather.status == 'ok' %}
 ## Weather
 
-{{ data.weather | tojson(indent=2) }}
+{% for location, info in data.weather.locations.items() %}
+### {{ location }}
+
+{% if info.current is defined %}
+**{{ info.current.description | capitalize }}** — {{ info.current.temp }}C (feels like {{ info.current.feels_like }}C), humidity {{ info.current.humidity }}%, wind {{ info.current.wind_speed }} m/s
+{% endif %}
+
+{% if info.forecast is defined %}
+| Time | Forecast | Temp |
+|------|----------|------|
+{% for f in info.forecast %}
+| {{ f.time[11:16] if f.time|length > 11 else f.time }} | {{ f.description }} | {{ f.temp }}C |
+{% endfor %}
+{% endif %}
+
+{% if info.error is defined %}
+> Weather unavailable: {{ info.error }}
+{% endif %}
+{% endfor %}
+
+{% elif data.get('weather') and data.weather.status == 'skipped' %}
+## Weather
+
+> Weather gatherer skipped: {{ data.weather.reason }}
+> Set OPENWEATHER_API_KEY or add api_key to config/config.yaml.
+
+{% elif data.get('weather') and data.weather.status == 'error' %}
+## Weather
+
+> Weather gatherer failed: {{ data.weather.error }}
 
 {% endif %}
 ---
