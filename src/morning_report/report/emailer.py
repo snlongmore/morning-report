@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import smtplib
+import subprocess
 from datetime import datetime
 from email.message import EmailMessage
 from pathlib import Path
@@ -13,6 +14,53 @@ logger = logging.getLogger(__name__)
 
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
+
+KEYCHAIN_SERVICE = "morning-report-gmail"
+
+
+def get_keychain_password(account: str) -> str | None:
+    """Read the Gmail app password from macOS Keychain.
+
+    Args:
+        account: The account name (email address) stored in Keychain.
+
+    Returns:
+        The password string, or None if not found.
+    """
+    result = subprocess.run(
+        ["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", account, "-w"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
+
+
+def set_keychain_password(account: str, password: str) -> None:
+    """Store the Gmail app password in macOS Keychain.
+
+    Deletes any existing entry first, then adds the new one.
+
+    Args:
+        account: The account name (email address) to store against.
+        password: The app password to store.
+
+    Raises:
+        RuntimeError: If the Keychain operation fails.
+    """
+    # Delete existing entry (ignore errors if not found)
+    subprocess.run(
+        ["security", "delete-generic-password", "-s", KEYCHAIN_SERVICE, "-a", account],
+        capture_output=True,
+    )
+    result = subprocess.run(
+        ["security", "add-generic-password", "-s", KEYCHAIN_SERVICE, "-a", account, "-w", password],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Failed to store password in Keychain: {result.stderr.strip()}")
 
 
 def _build_summary(data: dict) -> str:
@@ -141,25 +189,32 @@ def send_report(
     json_path: Path,
     recipient: str,
     sender: str,
-    app_password: str,
+    app_password: str | None = None,
 ) -> None:
     """Send morning report via Gmail SMTP with .docx attachment and summary body.
+
+    The app password is resolved in order:
+    1. Explicit app_password argument (if provided and not a placeholder)
+    2. macOS Keychain (service: morning-report-gmail, account: sender)
 
     Args:
         docx_path: Path to the .docx report file.
         json_path: Path to the gathered data JSON (for summary extraction).
         recipient: Email address to send to.
         sender: Email address to send from.
-        app_password: Gmail app password for SMTP authentication.
+        app_password: Gmail app password. If None, reads from macOS Keychain.
 
     Raises:
-        ValueError: If app_password is empty or still a placeholder.
+        ValueError: If no password can be resolved.
         FileNotFoundError: If docx_path or json_path don't exist.
     """
+    # Resolve password: explicit arg → Keychain
     if not app_password or app_password.startswith("${"):
+        app_password = get_keychain_password(sender)
+    if not app_password:
         raise ValueError(
-            "Gmail app password not configured. "
-            "Set GMAIL_APP_PASSWORD in your environment. "
+            "Gmail app password not found. Store it with:\n"
+            "  morning-report set-password\n"
             "Generate one at https://myaccount.google.com/apppasswords"
         )
 

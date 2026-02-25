@@ -258,7 +258,6 @@ def email(
         json_path=json_path,
         recipient=email_cfg.get("recipient", "snlongmore@gmail.com"),
         sender=email_cfg.get("sender", "snlongmore@gmail.com"),
-        app_password=email_cfg.get("app_password", ""),
     )
     typer.echo(f"Report emailed to {email_cfg.get('recipient', 'snlongmore@gmail.com')}")
 
@@ -322,32 +321,54 @@ def auto(
     # Step 4: Email
     typer.echo("\n=== Step 4/4: Emailing report ===")
     email_cfg = cfg.get("automation", {}).get("email", {})
-    app_password = email_cfg.get("app_password", "")
 
-    if not app_password or app_password.startswith("${"):
-        typer.echo("  Skipping email: GMAIL_APP_PASSWORD not configured.")
+    try:
+        from morning_report.report.emailer import send_report
+        json_path = briefings_dir / f"{date_str}.json"
+        send_report(
+            docx_path=docx_path,
+            json_path=json_path,
+            recipient=email_cfg.get("recipient", "snlongmore@gmail.com"),
+            sender=email_cfg.get("sender", "snlongmore@gmail.com"),
+        )
+        typer.echo(f"  Report emailed to {email_cfg.get('recipient', 'snlongmore@gmail.com')}")
+    except ValueError as e:
+        typer.echo(f"  Skipping email: {e}", err=True)
         typer.echo("  Report available locally:")
         typer.echo(f"    Markdown: {briefings_dir}/{date_str}.md")
         typer.echo(f"    Word:     {docx_path}")
-    else:
-        try:
-            from morning_report.report.emailer import send_report
-            json_path = briefings_dir / f"{date_str}.json"
-            send_report(
-                docx_path=docx_path,
-                json_path=json_path,
-                recipient=email_cfg.get("recipient", "snlongmore@gmail.com"),
-                sender=email_cfg.get("sender", "snlongmore@gmail.com"),
-                app_password=app_password,
-            )
-            typer.echo(f"  Report emailed to {email_cfg.get('recipient', 'snlongmore@gmail.com')}")
-        except Exception as e:
-            typer.echo(f"  Email failed: {e}", err=True)
-            typer.echo("  Report available locally:")
-            typer.echo(f"    Markdown: {briefings_dir}/{date_str}.md")
-            typer.echo(f"    Word:     {docx_path}")
+    except Exception as e:
+        typer.echo(f"  Email failed: {e}", err=True)
+        typer.echo("  Report available locally:")
+        typer.echo(f"    Markdown: {briefings_dir}/{date_str}.md")
+        typer.echo(f"    Word:     {docx_path}")
 
     typer.echo("\nDone.")
+
+
+@app.command(name="set-password")
+def set_password(
+    config_path: Optional[Path] = typer.Option(
+        None, "--config", "-c",
+        help="Path to config file.",
+    ),
+):
+    """Store the Gmail app password in macOS Keychain."""
+    cfg = load_config(config_path)
+    email_cfg = cfg.get("automation", {}).get("email", {})
+    account = email_cfg.get("sender", "snlongmore@gmail.com")
+
+    typer.echo(f"Storing Gmail app password for {account} in macOS Keychain.")
+    typer.echo("Generate an app password at: https://myaccount.google.com/apppasswords")
+    password = typer.prompt("App password", hide_input=True)
+
+    if not password.strip():
+        typer.echo("Password cannot be empty.", err=True)
+        raise typer.Exit(1)
+
+    from morning_report.report.emailer import set_keychain_password
+    set_keychain_password(account, password.strip())
+    typer.echo(f"Password stored in Keychain (service: morning-report-gmail, account: {account})")
 
 
 _PLIST_LABEL = "com.snl.morning-report"

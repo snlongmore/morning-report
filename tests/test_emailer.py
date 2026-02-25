@@ -6,7 +6,10 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from morning_report.report.emailer import send_report, build_message, _build_summary
+from morning_report.report.emailer import (
+    send_report, build_message, _build_summary,
+    get_keychain_password, set_keychain_password, KEYCHAIN_SERVICE,
+)
 
 
 SAMPLE_DATA = {
@@ -148,23 +151,42 @@ class TestSendReport:
         mock_smtp_instance.login.assert_called_once_with("sender@example.com", "test-password-123")
         mock_smtp_instance.send_message.assert_called_once()
 
-    def test_raises_on_empty_password(self, tmp_path):
+    def test_raises_when_no_password_available(self, tmp_path):
         docx_path = tmp_path / "report.docx"
         docx_path.write_bytes(b"fake docx")
         json_path = tmp_path / "report.json"
         json_path.write_text(json.dumps(SAMPLE_DATA))
 
-        with pytest.raises(ValueError, match="Gmail app password not configured"):
-            send_report(docx_path, json_path, "to@test.com", "from@test.com", "")
+        with patch("morning_report.report.emailer.get_keychain_password", return_value=None):
+            with pytest.raises(ValueError, match="Gmail app password not found"):
+                send_report(docx_path, json_path, "to@test.com", "from@test.com")
 
-    def test_raises_on_placeholder_password(self, tmp_path):
+    def test_placeholder_password_falls_through_to_keychain(self, tmp_path):
         docx_path = tmp_path / "report.docx"
         docx_path.write_bytes(b"fake docx")
         json_path = tmp_path / "report.json"
         json_path.write_text(json.dumps(SAMPLE_DATA))
 
-        with pytest.raises(ValueError, match="Gmail app password not configured"):
-            send_report(docx_path, json_path, "to@test.com", "from@test.com", "${GMAIL_APP_PASSWORD}")
+        with patch("morning_report.report.emailer.get_keychain_password", return_value=None):
+            with pytest.raises(ValueError, match="Gmail app password not found"):
+                send_report(docx_path, json_path, "to@test.com", "from@test.com", "${GMAIL_APP_PASSWORD}")
+
+    def test_uses_keychain_when_no_explicit_password(self, tmp_path):
+        docx_path = tmp_path / "report.docx"
+        docx_path.write_bytes(b"fake docx")
+        json_path = tmp_path / "report.json"
+        json_path.write_text(json.dumps(SAMPLE_DATA))
+
+        mock_smtp = MagicMock()
+        mock_smtp_instance = MagicMock()
+        mock_smtp.return_value.__enter__ = MagicMock(return_value=mock_smtp_instance)
+        mock_smtp.return_value.__exit__ = MagicMock(return_value=False)
+
+        with patch("morning_report.report.emailer.get_keychain_password", return_value="keychain-pw"):
+            with patch("morning_report.report.emailer.smtplib.SMTP", mock_smtp):
+                send_report(docx_path, json_path, "to@test.com", "from@test.com")
+
+        mock_smtp_instance.login.assert_called_once_with("from@test.com", "keychain-pw")
 
     def test_raises_on_missing_docx(self, tmp_path):
         json_path = tmp_path / "report.json"
@@ -181,3 +203,54 @@ class TestSendReport:
 
         with pytest.raises(FileNotFoundError, match="JSON data not found"):
             send_report(docx_path, missing_json, "to@test.com", "from@test.com", "password")
+
+
+class TestKeychainPassword:
+    def test_get_keychain_password_success(self):
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "my-secret-password\n"
+
+        with patch("morning_report.report.emailer.subprocess.run", return_value=mock_result) as mock_run:
+            pw = get_keychain_password("test@example.com")
+
+        assert pw == "my-secret-password"
+        mock_run.assert_called_once_with(
+            ["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", "test@example.com", "-w"],
+            capture_output=True,
+            text=True,
+        )
+
+    def test_get_keychain_password_not_found(self):
+        mock_result = MagicMock()
+        mock_result.returncode = 44  # security exit code for "not found"
+        mock_result.stdout = ""
+
+        with patch("morning_report.report.emailer.subprocess.run", return_value=mock_result):
+            pw = get_keychain_password("test@example.com")
+
+        assert pw is None
+
+    def test_set_keychain_password_success(self):
+        mock_delete = MagicMock(returncode=0)
+        mock_add = MagicMock(returncode=0, stderr="")
+
+        with patch("morning_report.report.emailer.subprocess.run", side_effect=[mock_delete, mock_add]) as mock_run:
+            set_keychain_password("test@example.com", "new-password")
+
+        # First call: delete existing
+        assert mock_run.call_args_list[0][0][0] == [
+            "security", "delete-generic-password", "-s", KEYCHAIN_SERVICE, "-a", "test@example.com",
+        ]
+        # Second call: add new
+        assert mock_run.call_args_list[1][0][0] == [
+            "security", "add-generic-password", "-s", KEYCHAIN_SERVICE, "-a", "test@example.com", "-w", "new-password",
+        ]
+
+    def test_set_keychain_password_failure(self):
+        mock_delete = MagicMock(returncode=0)
+        mock_add = MagicMock(returncode=1, stderr="some error")
+
+        with patch("morning_report.report.emailer.subprocess.run", side_effect=[mock_delete, mock_add]):
+            with pytest.raises(RuntimeError, match="Failed to store password"):
+                set_keychain_password("test@example.com", "new-password")
