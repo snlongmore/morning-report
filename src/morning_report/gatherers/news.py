@@ -43,12 +43,20 @@ def _parse_feeds(feeds: dict[str, list[str]], max_per_category: int = 5) -> dict
             try:
                 feed = feedparser.parse(url)
                 for entry in feed.entries[:max_per_category]:
-                    items.append({
+                    item = {
                         "title": entry.get("title", ""),
                         "link": entry.get("link", ""),
                         "published": entry.get("published", ""),
                         "source": feed.feed.get("title", url),
-                    })
+                    }
+                    # Extract summary and full content when available
+                    summary = entry.get("summary", "")
+                    if summary:
+                        item["summary"] = summary
+                    content_list = entry.get("content", [])
+                    if content_list and isinstance(content_list, list):
+                        item["content"] = content_list[0].get("value", "")
+                    items.append(item)
             except Exception as e:
                 logger.warning("Failed to parse feed %s: %s", url, e)
 

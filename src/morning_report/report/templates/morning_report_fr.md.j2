@@ -1,0 +1,350 @@
+# Rapport du matin — {{ date_fr }}
+
+*Genere a {{ generated_at }}*
+
+---
+
+{% if data.get('calendar') and data.calendar.status == 'ok' %}
+## Emploi du temps
+
+{% if data.calendar.today %}
+| Heure | Evenement | Calendrier | Lieu |
+|-------|-----------|------------|------|
+{% for evt in data.calendar.today %}
+{% if evt.all_day %}| Toute la journee | **{{ evt.title }}** | {{ evt.calendar }} | {{ evt.location or '—' }} |
+{% else %}| {{ evt.start[11:16] }}–{{ evt.end[11:16] }} | **{{ evt.title }}** | {{ evt.calendar }} | {{ evt.location or '—' }} |
+{% endif %}
+{% endfor %}
+{% else %}
+Aucun evenement prevu aujourd'hui.
+{% endif %}
+
+{% if data.calendar.upcoming %}
+### A venir (jusqu'au {{ data.calendar.date_range.to }})
+
+{% for evt in data.calendar.upcoming %}
+{% if evt.all_day %}- **{{ evt.title }}** — {{ evt.start[:10] }} toute la journee ({{ evt.calendar }})
+{% else %}- **{{ evt.title }}** — {{ evt.start[:10] }} {{ evt.start[11:16] }}–{{ evt.end[11:16] }} ({{ evt.calendar }})
+{% endif %}
+{% if evt.location %}  *{{ evt.location }}*
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% elif data.get('calendar') and data.calendar.status == 'error' %}
+## Emploi du temps
+
+> Erreur du calendrier : {{ data.calendar.error }}
+
+{% endif %}
+---
+
+{% if data.get('email') and data.email.status == 'ok' %}
+## Resume des courriels
+
+**{{ data.email.total_unread }} non lus** sur {{ data.email.account_summary | length }} comptes
+
+{% for account, count in data.email.account_summary.items() %}
+- **{{ account }}** : {{ count }} non lus
+{% endfor %}
+
+{% if data.email.needs_response %}
+### Necessite une reponse
+
+{% for msg in data.email.needs_response %}
+- {% if msg._is_vip %}**[VIP]** {% endif %}**{{ msg.subject }}** — de {{ msg.sender }} ({{ msg.account }})
+{% endfor %}
+{% endif %}
+
+{% elif data.get('email') and data.email.status == 'error' %}
+## Resume des courriels
+
+> Erreur des courriels : {{ data.email.error }}
+
+{% endif %}
+---
+
+{% if data.get('github') and data.github.status == 'ok' %}
+## GitHub
+
+{% if data.github.notification_count %}
+**{{ data.github.notification_count }}** notifications non lues
+{% endif %}
+
+{% if data.github.prs_to_review %}
+### PRs a examiner
+
+{% for pr in data.github.prs_to_review %}
+- [**{{ pr.title }}**]({{ pr.url }}) — {{ pr.repository.nameWithOwner if pr.repository else '' }}
+{% endfor %}
+{% endif %}
+
+{% if data.github.assigned_issues %}
+### Tickets assignes
+
+{% for issue in data.github.assigned_issues %}
+- [**{{ issue.title }}**]({{ issue.url }}) — {{ issue.repository.nameWithOwner if issue.repository else '' }}
+{% endfor %}
+{% endif %}
+
+{% if not data.github.notification_count and not data.github.prs_to_review and not data.github.assigned_issues %}
+Aucune activite GitHub.
+{% endif %}
+
+{% elif data.get('github') and data.github.status == 'error' %}
+## GitHub
+
+> Erreur GitHub : {{ data.github.error }}
+
+{% endif %}
+---
+
+{% if data.get('arxiv') and data.arxiv.status == 'ok' %}
+## Veille arXiv
+
+**{{ data.arxiv.total_new }}** nouveaux articles dans {{ data.arxiv.categories_searched | join(', ') }}
+
+{% if data.arxiv.tiers['1'] %}
+### Niveau 1 — Cite vos travaux
+
+{% for p in data.arxiv.tiers['1'] %}
+- **{{ p.title }}** — {{ p.authors[:3] | join(', ') }}{% if p.author_count > 3 %} +{{ p.author_count - 3 }}{% endif %}
+  [{{ p.arxiv_id }}]({{ p.abs_url }}) | {{ p.primary_category }}
+{% endfor %}
+{% endif %}
+
+{% if data.arxiv.tiers['2'] %}
+### Niveau 2 — Recherche principale
+
+{% for p in data.arxiv.tiers['2'] %}
+- **{{ p.title }}** — {{ p.authors[:3] | join(', ') }}{% if p.author_count > 3 %} +{{ p.author_count - 3 }}{% endif %}
+  [{{ p.arxiv_id }}]({{ p.abs_url }}) | {{ p.primary_category }} | Mots-cles : {{ p.matched_keywords | join(', ') }}
+{% endfor %}
+{% endif %}
+
+{% if data.arxiv.tiers['3'] %}
+### Niveau 3 — Projet COOL
+
+{% for p in data.arxiv.tiers['3'] %}
+- **{{ p.title }}** — {{ p.authors[:3] | join(', ') }}{% if p.author_count > 3 %} +{{ p.author_count - 3 }}{% endif %}
+  [{{ p.arxiv_id }}]({{ p.abs_url }}) | {{ p.primary_category }} | Mots-cles : {{ p.matched_keywords | join(', ') }}
+{% endfor %}
+{% endif %}
+
+{% if not data.arxiv.tiers['1'] and not data.arxiv.tiers['2'] and not data.arxiv.tiers['3'] %}
+Aucun article ne correspond a vos interets de recherche aujourd'hui.
+{% endif %}
+
+{% if data.arxiv.pdfs_downloaded %}
+*{{ data.arxiv.pdfs_downloaded }} PDFs telecharges dans papers/*
+{% endif %}
+{% if not data.arxiv.ads_citations_available %}
+*Note : Verification des citations ADS indisponible (pas de jeton API). Classification Niveau 1 desactivee.*
+{% endif %}
+
+{% elif data.get('arxiv') and data.arxiv.status == 'error' %}
+## Veille arXiv
+
+> Erreur arXiv : {{ data.arxiv.error }}
+
+{% endif %}
+---
+
+{% if data.get('markets') and data.markets.status == 'ok' %}
+## Marches
+
+{% if data.markets.crypto %}
+### Crypto
+
+| Jeton | Prix (USD) | Variation 24h |
+|-------|------------|---------------|
+{% for id, info in data.markets.crypto.items() %}
+{% if info.price_usd is defined %}| **{{ id }}** | ${{ "%.2f" | format(info.price_usd) if info.price_usd >= 1 else "%.6f" | format(info.price_usd) }} | {{ "%.1f" | format(info.change_24h_pct) }}% |
+{% else %}| **{{ id }}** | {{ info.error }} | — |
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if data.markets.stocks %}
+### Indices et fonds
+
+| Ticker | Prix | Variation |
+|--------|------|-----------|
+{% for ticker, info in data.markets.stocks.items() %}
+{% if info.price is defined %}| **{{ ticker }}** | {{ "%.2f" | format(info.price) }} {{ info.currency }} | {{ "%.1f" | format(info.change_pct) if info.change_pct is not none else '—' }}% |
+{% else %}| **{{ ticker }}** | {{ info.error }} | — |
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if data.markets.stocks_error %}
+> Indices/fonds indisponibles : {{ data.markets.stocks_error }}
+{% endif %}
+
+{% elif data.get('markets') and data.markets.status == 'error' %}
+## Marches
+
+> Erreur des marches : {{ data.markets.error }}
+
+{% endif %}
+---
+
+{% if data.get('ads') and data.ads.status == 'ok' %}
+## Metriques academiques (ADS)
+
+**{{ data.ads.author }}** — {{ data.ads.num_bibcodes }} articles dans ADS
+
+| Metrique | Valeur |
+|----------|--------|
+| h-index | {{ data.ads.indicators.h }} |
+| g-index | {{ data.ads.indicators.g }} |
+| m-index | {{ data.ads.indicators.m }} |
+| i10-index | {{ data.ads.indicators.i10 }} |
+| i100-index | {{ data.ads.indicators.i100 }} |
+| tori | {{ data.ads.indicators.tori }} |
+| read10 | {{ data.ads.indicators.read10 }} |
+
+**Citations :** {{ data.ads.citation_stats.total_citations }} au total ({{ data.ads.citation_stats.citing_papers }} articles citants, {{ data.ads.citation_stats.self_citations }} auto-citations)
+**Lectures :** {{ data.ads.basic_stats.total_reads }} au total ({{ data.ads.basic_stats.recent_reads }} recentes)
+
+{% if data.ads.deltas and data.ads.deltas.get('indicators') %}
+### Evolutions depuis {{ data.ads.deltas.compared_to }}
+
+{% for key, val in data.ads.deltas.indicators.items() %}
+- **{{ key }}** : {{ val.previous }} → {{ val.current }} ({{ '+' if val.delta > 0 else '' }}{{ val.delta }})
+{% endfor %}
+{% endif %}
+{% if data.ads.deltas and data.ads.deltas.get('citations') %}
+{% for key, val in data.ads.deltas.citations.items() %}
+- **{{ key }}** : {{ val.previous }} → {{ val.current }} ({{ '+' if val.delta > 0 else '' }}{{ val.delta }})
+{% endfor %}
+{% endif %}
+
+{% elif data.get('ads') and data.ads.status == 'skipped' %}
+## Metriques academiques (ADS)
+
+> ADS ignore : {{ data.ads.reason }}
+> Definir ADS_API_TOKEN ou ajouter api_token dans config/config.yaml.
+
+{% elif data.get('ads') and data.ads.status == 'error' %}
+## Metriques academiques (ADS)
+
+> Erreur ADS : {{ data.ads.error }}
+
+{% endif %}
+---
+
+{% if data.get('news') and data.news.status == 'ok' %}
+## Revue de presse
+
+{% for category, articles in data.news.categories.items() %}
+{% if articles %}
+### {{ category }}
+
+{% for article in articles %}
+- [{{ article.title }}]({{ article.link }}) — *{{ article.source }}*
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+{% elif data.get('news') and data.news.status == 'error' %}
+## Revue de presse
+
+> Erreur des actualites : {{ data.news.error }}
+
+{% endif %}
+---
+
+{% if data.get('news_fr') and data.news_fr.status == 'ok' %}
+## Revue de presse francaise
+
+{% for category, articles in data.news_fr.categories.items() %}
+{% if articles %}
+### {{ category }}
+
+{% for article in articles %}
+- [{{ article.title }}]({{ article.link }}) — *{{ article.source }}*
+{% if article.summary %}  {{ article.summary[:200] }}{% if article.summary|length > 200 %}...{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+{% elif data.get('news_fr') and data.news_fr.status == 'error' %}
+## Revue de presse francaise
+
+> Erreur des actualites francaises : {{ data.news_fr.error }}
+
+{% endif %}
+---
+
+{% if data.get('meditation') and data.meditation.status == 'ok' %}
+## Meditation du jour — Richard Rohr
+
+{% set med_items = data.meditation['items'] %}
+{% if med_items %}
+{% set med = med_items[0] %}
+**{{ med.title }}**
+
+{{ med.content or med.summary or '' }}
+{% endif %}
+
+{% endif %}
+---
+
+## Poeme du jour
+
+*Section completee par le skill /morning-report*
+
+---
+
+## Ce jour dans l'histoire
+
+*Section completee par le skill /morning-report*
+
+---
+
+## Lecon du jour
+
+*Section completee par le skill /morning-report*
+
+---
+
+{% if data.get('weather') and data.weather.status == 'ok' %}
+## Meteo
+
+{% for location, info in data.weather.locations.items() %}
+### {{ location }}
+
+{% if info.current is defined %}
+**{{ info.current.description | capitalize }}** — {{ info.current.temp }}°C (ressenti {{ info.current.feels_like }}°C), humidite {{ info.current.humidity }}%, vent {{ info.current.wind_speed }} m/s
+{% endif %}
+
+{% if info.forecast is defined %}
+| Heure | Prevision | Temperature |
+|-------|-----------|-------------|
+{% for f in info.forecast %}
+| {{ f.time[11:16] if f.time|length > 11 else f.time }} | {{ f.description }} | {{ f.temp }}°C |
+{% endfor %}
+{% endif %}
+
+{% if info.error is defined %}
+> Meteo indisponible : {{ info.error }}
+{% endif %}
+{% endfor %}
+
+{% elif data.get('weather') and data.weather.status == 'skipped' %}
+## Meteo
+
+> Meteo ignoree : {{ data.weather.reason }}
+> Definir OPENWEATHER_API_KEY ou ajouter api_key dans config/config.yaml.
+
+{% elif data.get('weather') and data.weather.status == 'error' %}
+## Meteo
+
+> Erreur meteo : {{ data.weather.error }}
+
+{% endif %}
+---
+
+*Fin du rapport du matin.*

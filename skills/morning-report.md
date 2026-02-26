@@ -245,6 +245,84 @@ After writing the file, present a concise summary directly in the conversation:
 
 Keep the summary under 20 lines. The full briefing is in the file for reference.
 
+### Step 9: Generate French report
+
+Check `config.yaml` for `french.enabled: true`. If enabled, generate a full French report.
+
+Read the completed English briefing and the gathered JSON:
+```
+/Users/stevenlongmore/GitHub_repos/snl/morning_report/briefings/{TODAY}.md
+/Users/stevenlongmore/GitHub_repos/snl/morning_report/briefings/{TODAY}.json
+```
+
+Also read the template-generated French report (produced by the CLI in Step 2):
+```
+/Users/stevenlongmore/GitHub_repos/snl/morning_report/briefings/{TODAY}-fr.md
+```
+
+The template has already rendered the structured data sections (calendar, email, markets, weather, arXiv, ADS, news) in French. Your job is to enhance it by:
+
+#### 9a. Translate the narrative sections to French
+
+Rewrite all MCP-sourced narrative sections (Priority Actions, Slack Activity, Linear, Jira, Draft Responses, Meeting Prep) in natural French at the CEFR level specified in config (default: B1).
+
+Rules:
+- Keep proper nouns, identifiers, URLs, tickers, issue keys (e.g. RES-123, EOVT1-45) in their original form
+- Keep technical terms in English where a French equivalent would be confusing (e.g. "pull request", "commit", "sprint")
+- Translate headers, narrative text, descriptions, weather terms, status labels
+- Use natural French phrasing, not word-for-word translation
+
+#### 9b. Add French news section
+
+Read `news_fr` from the gathered JSON (real French headlines from L'Equipe, Le Monde, Journal du Coin). These are ALREADY in French — render them as the "Revue de presse francaise" section. Do not translate these; they provide authentic French reading practice.
+
+#### 9c. Translate Richard Rohr meditation
+
+Read `meditation` from the gathered JSON (English text from CAC RSS feed). Translate the daily meditation to natural, reflective French. The reader already knows the English version, so this is comprehensible input. Include as "Meditation du jour — Richard Rohr".
+
+#### 9d. Generate poem
+
+Select a French poem or literary excerpt appropriate to the season, weather, or mood of the day. Prefer well-known French poets (Hugo, Baudelaire, Verlaine, Prevert, Rimbaud, Apollinaire, etc.) but also include Francophone poets from Africa, Quebec, and the Caribbean for variety.
+
+Format:
+```markdown
+## Poeme du jour
+
+### [Title] — [Poet Name]
+
+[poem text]
+
+*[Brief note on vocabulary or context, written in French at the configured CEFR level]*
+```
+
+#### 9e. Generate "Ce jour dans l'histoire"
+
+Write a short paragraph (3-5 sentences) about a notable event that occurred on today's date in history. Prefer:
+- Science, exploration, space
+- French history and culture
+- Literature, art, music
+- Significant world events
+
+Written in natural French at the configured CEFR level. Include the year.
+
+#### 9f. Generate "Lecon du jour"
+
+Create a language learning section drawn from today's report content:
+
+- **Vocabulaire du jour** (8-12 words): Pick words from today's actual report content (weather, news, markets, calendar). Include gender (m/f), and one example sentence using the word in context.
+- **Expression du jour**: One French idiom or expression related to something in today's report. Explain meaning and usage in French at the configured level.
+- **Point de grammaire**: One grammar concept illustrated with a sentence drawn from the report. Brief explanation in French.
+- **Mini-exercice**: 3-4 fill-in-the-blank questions using today's data. Put answers in a `<details><summary>Reponses</summary>` block.
+
+#### 9g. Write the enhanced French report
+
+Write the final French report to:
+```
+/Users/stevenlongmore/GitHub_repos/snl/morning_report/briefings/{TODAY}-fr.md
+```
+
+This replaces the template-generated version with the fully enhanced version including all sections above.
+
 ## Error handling
 
 - If CLI gather fails: report the error and continue with MCP-only data

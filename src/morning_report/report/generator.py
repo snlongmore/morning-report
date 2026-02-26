@@ -14,11 +14,47 @@ logger = logging.getLogger(__name__)
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 
+# French day and month names for date formatting
+FRENCH_DAYS = {
+    "Monday": "lundi",
+    "Tuesday": "mardi",
+    "Wednesday": "mercredi",
+    "Thursday": "jeudi",
+    "Friday": "vendredi",
+    "Saturday": "samedi",
+    "Sunday": "dimanche",
+}
+
+FRENCH_MONTHS = {
+    1: "janvier",
+    2: "fevrier",
+    3: "mars",
+    4: "avril",
+    5: "mai",
+    6: "juin",
+    7: "juillet",
+    8: "aout",
+    9: "septembre",
+    10: "octobre",
+    11: "novembre",
+    12: "decembre",
+}
+
+
+def french_date(date: datetime) -> str:
+    """Format a date in French: 'jeudi 26 fevrier 2026'."""
+    day_name = FRENCH_DAYS[date.strftime("%A")]
+    day_num = date.day
+    month_name = FRENCH_MONTHS[date.month]
+    year = date.year
+    return f"{day_name} {day_num} {month_name} {year}"
+
 
 def generate_report(
     data: dict[str, Any],
     output_dir: Path | None = None,
     date: datetime | None = None,
+    language: str = "en",
 ) -> str:
     """Generate a morning report from gathered data.
 
@@ -26,6 +62,7 @@ def generate_report(
         data: Dictionary mapping gatherer names to their results.
         output_dir: Directory to write the report file. Defaults to briefings/.
         date: Date for the report. Defaults to today.
+        language: Language code — "en" for English, "fr" for French.
 
     Returns:
         The rendered report as a string.
@@ -39,11 +76,18 @@ def generate_report(
         trim_blocks=True,
         lstrip_blocks=True,
     )
-    template = env.get_template("morning_report.md.j2")
+
+    if language == "fr":
+        template = env.get_template("morning_report_fr.md.j2")
+        day_name_display = french_date(date)
+    else:
+        template = env.get_template("morning_report.md.j2")
+        day_name_display = day_name
 
     rendered = template.render(
         date=date_str,
-        day_name=day_name,
+        day_name=day_name_display if language == "en" else day_name,
+        date_fr=french_date(date) if language == "fr" else None,
         generated_at=datetime.now().strftime("%H:%M"),
         data=data,
     )
@@ -52,7 +96,8 @@ def generate_report(
     if output_dir:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = output_dir / f"{date_str}.md"
+        suffix = "-fr" if language == "fr" else ""
+        output_path = output_dir / f"{date_str}{suffix}.md"
         output_path.write_text(rendered)
         logger.info("Report written to %s", output_path)
 
