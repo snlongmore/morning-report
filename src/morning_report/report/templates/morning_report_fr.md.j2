@@ -239,7 +239,7 @@ Aucun article ne correspond a vos interets de recherche aujourd'hui.
 
 {% for category, articles in data.news.categories.items() %}
 {% if articles %}
-### {{ category }}
+### {{ category | news_cat_fr }}
 
 {% for article in articles %}
 - [{{ article.title }}]({{ article.link }}) — *{{ article.source }}*
@@ -286,28 +286,13 @@ Aucun article ne correspond a vos interets de recherche aujourd'hui.
 {% set med = med_items[0] %}
 **{{ med.title }}**
 
-{{ med.content or med.summary or '' }}
+{% set med_text = med.content or med.summary or '' %}
+{{ med_text }}
+
+{% if med.link %}*[Lire la meditation complete]({{ med.link }})*{% endif %}
 {% endif %}
 
 {% endif %}
----
-
-## Poeme du jour
-
-*Section completee par le skill /morning-report*
-
----
-
-## Ce jour dans l'histoire
-
-*Section completee par le skill /morning-report*
-
----
-
-## Lecon du jour
-
-*Section completee par le skill /morning-report*
-
 ---
 
 {% if data.get('weather') and data.weather.status == 'ok' %}
@@ -317,14 +302,14 @@ Aucun article ne correspond a vos interets de recherche aujourd'hui.
 ### {{ location }}
 
 {% if info.current is defined %}
-**{{ info.current.description | capitalize }}** — {{ info.current.temp }}°C (ressenti {{ info.current.feels_like }}°C), humidite {{ info.current.humidity }}%, vent {{ info.current.wind_speed }} m/s
+**{{ info.current.description | weather_fr | capitalize }}** — {{ info.current.temp }}°C (ressenti {{ info.current.feels_like }}°C), humidite {{ info.current.humidity }}%, vent {{ info.current.wind_speed }} m/s
 {% endif %}
 
 {% if info.forecast is defined %}
 | Heure | Prevision | Temperature |
 |-------|-----------|-------------|
 {% for f in info.forecast %}
-| {{ f.time[11:16] if f.time|length > 11 else f.time }} | {{ f.description }} | {{ f.temp }}°C |
+| {{ f.time[11:16] if f.time|length > 11 else f.time }} | {{ f.description | weather_fr }} | {{ f.temp }}°C |
 {% endfor %}
 {% endif %}
 

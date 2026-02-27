@@ -9,6 +9,9 @@ if [[ -f "$HOME/.zshenv" ]]; then
     source "$HOME/.zshenv"
 fi
 
+# Ensure Homebrew/miniforge binaries are on PATH (launchd has minimal PATH)
+export PATH="/Users/stevenlongmore/miniforge3/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 # Activate the project virtual environment
 VENV="/Users/stevenlongmore/GitHub_repos/snl/morning_report/.venv/bin/activate"
 if [[ -f "$VENV" ]]; then

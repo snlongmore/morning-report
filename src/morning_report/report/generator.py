@@ -41,6 +41,35 @@ FRENCH_MONTHS = {
 }
 
 
+WEATHER_FR = {
+    "clear sky": "ciel degage",
+    "few clouds": "quelques nuages",
+    "scattered clouds": "nuages epars",
+    "broken clouds": "nuages fragmentes",
+    "overcast clouds": "ciel couvert",
+    "shower rain": "averses",
+    "rain": "pluie",
+    "light rain": "pluie legere",
+    "moderate rain": "pluie moderee",
+    "heavy intensity rain": "forte pluie",
+    "thunderstorm": "orage",
+    "snow": "neige",
+    "light snow": "neige legere",
+    "mist": "brume",
+    "fog": "brouillard",
+    "haze": "brume seche",
+    "drizzle": "bruine",
+    "light intensity drizzle": "bruine legere",
+}
+
+NEWS_CATEGORIES_FR = {
+    "Astronomy": "Astronomie",
+    "AI/ML": "IA/ML",
+    "Shipping": "Transport maritime",
+    "Crypto": "Crypto",
+}
+
+
 def french_date(date: datetime) -> str:
     """Format a date in French: 'jeudi 26 fevrier 2026'."""
     day_name = FRENCH_DAYS[date.strftime("%A")]
@@ -48,6 +77,16 @@ def french_date(date: datetime) -> str:
     month_name = FRENCH_MONTHS[date.month]
     year = date.year
     return f"{day_name} {day_num} {month_name} {year}"
+
+
+def _weather_fr(description: str) -> str:
+    """Translate a weather description to French, falling back to original."""
+    return WEATHER_FR.get(description.lower(), description)
+
+
+def _news_category_fr(category: str) -> str:
+    """Translate a news category name to French, falling back to original."""
+    return NEWS_CATEGORIES_FR.get(category, category)
 
 
 def generate_report(
@@ -76,6 +115,8 @@ def generate_report(
         trim_blocks=True,
         lstrip_blocks=True,
     )
+    env.filters["weather_fr"] = _weather_fr
+    env.filters["news_cat_fr"] = _news_category_fr
 
     if language == "fr":
         template = env.get_template("morning_report_fr.md.j2")

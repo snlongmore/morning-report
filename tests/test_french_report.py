@@ -12,6 +12,10 @@ from morning_report.report.generator import (
     french_date,
     FRENCH_DAYS,
     FRENCH_MONTHS,
+    WEATHER_FR,
+    NEWS_CATEGORIES_FR,
+    _weather_fr,
+    _news_category_fr,
 )
 from morning_report.report.emailer import (
     _build_summary_fr,
@@ -229,11 +233,10 @@ class TestFrenchReportGeneration:
         assert "Meditation du jour" in report
         assert "The Power of Letting Go" in report
 
-    def test_french_report_placeholder_sections(self, tmp_path):
+    def test_french_report_no_placeholder_sections(self, tmp_path):
+        """Template should not include empty placeholder sections — those are skill-only."""
         report = generate_report(SAMPLE_DATA, output_dir=tmp_path, language="fr")
-        assert "Poeme du jour" in report
-        assert "Ce jour dans l'histoire" in report
-        assert "Lecon du jour" in report
+        assert "Section completee par le skill" not in report
 
     def test_french_report_ends_with_french(self, tmp_path):
         report = generate_report(SAMPLE_DATA, output_dir=tmp_path, language="fr")
@@ -272,7 +275,7 @@ class TestNewsSummaryExtraction:
 
         article = result["Test"][0]
         assert article["summary"] == "This is the article summary."
-        assert article["content"] == "<p>Full content here.</p>"
+        assert article["content"] == "Full content here."
 
     def test_missing_summary_not_included(self):
         mock_feed = MagicMock()
@@ -421,3 +424,55 @@ class TestDualAttachmentEmail:
 
         parts = list(msg.iter_parts())
         assert len(parts) == 2  # text + 1 attachment
+
+
+# -- Weather translation ---------------------------------------------------
+
+class TestWeatherTranslation:
+    def test_common_descriptions(self):
+        assert _weather_fr("overcast clouds") == "ciel couvert"
+        assert _weather_fr("light rain") == "pluie legere"
+        assert _weather_fr("clear sky") == "ciel degage"
+        assert _weather_fr("scattered clouds") == "nuages epars"
+
+    def test_case_insensitive(self):
+        assert _weather_fr("Overcast Clouds") == "ciel couvert"
+        assert _weather_fr("LIGHT RAIN") == "pluie legere"
+
+    def test_unknown_falls_back(self):
+        assert _weather_fr("volcanic ash") == "volcanic ash"
+
+    def test_weather_in_french_report(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path, language="fr")
+        assert "ciel couvert" in report.lower()
+        assert "overcast clouds" not in report.lower()
+
+
+# -- News category translation ---------------------------------------------
+
+class TestNewsCategoryTranslation:
+    def test_known_categories(self):
+        assert _news_category_fr("Astronomy") == "Astronomie"
+        assert _news_category_fr("Shipping") == "Transport maritime"
+        assert _news_category_fr("AI/ML") == "IA/ML"
+
+    def test_unknown_falls_back(self):
+        assert _news_category_fr("Sports") == "Sports"
+
+    def test_categories_translated_in_report(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path, language="fr")
+        assert "### Astronomie" in report
+
+
+# -- HTML stripping --------------------------------------------------------
+
+class TestHtmlStripping:
+    def test_strip_html_in_news(self):
+        from morning_report.gatherers.news import _strip_html
+        assert _strip_html("<p>Hello <b>world</b></p>") == "Hello world"
+        assert _strip_html("No tags here") == "No tags here"
+        assert _strip_html("<div><p>Nested</p></div>") == "Nested"
+
+    def test_strip_html_whitespace(self):
+        from morning_report.gatherers.news import _strip_html
+        assert _strip_html("<p>Line one</p>\n\n<p>Line two</p>") == "Line one Line two"

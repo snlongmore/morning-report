@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from morning_report.gatherers.base import BaseGatherer
 
 logger = logging.getLogger(__name__)
+
+
+def _strip_html(text: str) -> str:
+    """Remove HTML tags and collapse whitespace."""
+    text = re.sub(r"<[^>]+>", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 # Default RSS feeds when none are configured
 _DEFAULT_FEEDS = {
@@ -49,13 +57,15 @@ def _parse_feeds(feeds: dict[str, list[str]], max_per_category: int = 5) -> dict
                         "published": entry.get("published", ""),
                         "source": feed.feed.get("title", url),
                     }
-                    # Extract summary and full content when available
+                    # Extract summary and full content when available (HTML stripped)
                     summary = entry.get("summary", "")
                     if summary:
-                        item["summary"] = summary
+                        item["summary"] = _strip_html(summary)
                     content_list = entry.get("content", [])
                     if content_list and isinstance(content_list, list):
-                        item["content"] = content_list[0].get("value", "")
+                        raw_content = content_list[0].get("value", "")
+                        if raw_content:
+                            item["content"] = _strip_html(raw_content)
                     items.append(item)
             except Exception as e:
                 logger.warning("Failed to parse feed %s: %s", url, e)

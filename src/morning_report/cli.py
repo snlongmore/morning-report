@@ -460,36 +460,41 @@ def auto(
             if md_fr_path.exists():
                 docx_fr_path = export_docx(md_fr_path)
                 typer.echo(f"  Exported: {docx_fr_path}")
-    except (RuntimeError, FileNotFoundError) as e:
+    except (RuntimeError, FileNotFoundError, OSError) as e:
         typer.echo(f"  Export failed: {e}", err=True)
         typer.echo("  Report is still available as markdown.")
-        raise typer.Exit(1)
+        docx_path = None
 
     # Step 4: Email
     typer.echo("\n=== Step 4/4: Emailing report ===")
     email_cfg = cfg.get("automation", {}).get("email", {})
 
-    try:
-        from morning_report.report.emailer import send_report
-        json_path = briefings_dir / f"{date_str}.json"
-        send_report(
-            docx_path=docx_path,
-            json_path=json_path,
-            recipient=email_cfg.get("recipient", "snlongmore@gmail.com"),
-            sender=email_cfg.get("sender", "snlongmore@gmail.com"),
-            docx_fr_path=docx_fr_path,
-        )
-        typer.echo(f"  Report emailed to {email_cfg.get('recipient', 'snlongmore@gmail.com')}")
-    except ValueError as e:
-        typer.echo(f"  Skipping email: {e}", err=True)
+    if docx_path is None:
+        typer.echo("  Skipping email: no .docx file to attach (export failed).")
         typer.echo("  Report available locally:")
         typer.echo(f"    Markdown: {briefings_dir}/{date_str}.md")
-        typer.echo(f"    Word:     {docx_path}")
-    except Exception as e:
-        typer.echo(f"  Email failed: {e}", err=True)
-        typer.echo("  Report available locally:")
-        typer.echo(f"    Markdown: {briefings_dir}/{date_str}.md")
-        typer.echo(f"    Word:     {docx_path}")
+    else:
+        try:
+            from morning_report.report.emailer import send_report
+            json_path = briefings_dir / f"{date_str}.json"
+            send_report(
+                docx_path=docx_path,
+                json_path=json_path,
+                recipient=email_cfg.get("recipient", "snlongmore@gmail.com"),
+                sender=email_cfg.get("sender", "snlongmore@gmail.com"),
+                docx_fr_path=docx_fr_path,
+            )
+            typer.echo(f"  Report emailed to {email_cfg.get('recipient', 'snlongmore@gmail.com')}")
+        except ValueError as e:
+            typer.echo(f"  Skipping email: {e}", err=True)
+            typer.echo("  Report available locally:")
+            typer.echo(f"    Markdown: {briefings_dir}/{date_str}.md")
+            typer.echo(f"    Word:     {docx_path}")
+        except Exception as e:
+            typer.echo(f"  Email failed: {e}", err=True)
+            typer.echo("  Report available locally:")
+            typer.echo(f"    Markdown: {briefings_dir}/{date_str}.md")
+            typer.echo(f"    Word:     {docx_path}")
 
     typer.echo("\nDone.")
 
