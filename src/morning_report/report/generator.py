@@ -1,4 +1,4 @@
-"""Report generator — assembles gathered data into a structured markdown briefing."""
+"""Report generator — renders the French learning document from gathered data."""
 
 from __future__ import annotations
 
@@ -40,7 +40,6 @@ FRENCH_MONTHS = {
     12: "decembre",
 }
 
-
 WEATHER_FR = {
     "clear sky": "ciel degage",
     "few clouds": "quelques nuages",
@@ -62,13 +61,6 @@ WEATHER_FR = {
     "light intensity drizzle": "bruine legere",
 }
 
-NEWS_CATEGORIES_FR = {
-    "Astronomy": "Astronomie",
-    "AI/ML": "IA/ML",
-    "Shipping": "Transport maritime",
-    "Crypto": "Crypto",
-}
-
 
 def french_date(date: datetime) -> str:
     """Format a date in French: 'jeudi 26 fevrier 2026'."""
@@ -84,31 +76,27 @@ def _weather_fr(description: str) -> str:
     return WEATHER_FR.get(description.lower(), description)
 
 
-def _news_category_fr(category: str) -> str:
-    """Translate a news category name to French, falling back to original."""
-    return NEWS_CATEGORIES_FR.get(category, category)
-
-
 def generate_report(
     data: dict[str, Any],
     output_dir: Path | None = None,
     date: datetime | None = None,
-    language: str = "en",
+    french_content: dict[str, Any] | None = None,
 ) -> str:
-    """Generate a morning report from gathered data.
+    """Generate the French learning document from gathered data.
 
     Args:
         data: Dictionary mapping gatherer names to their results.
         output_dir: Directory to write the report file. Defaults to briefings/.
         date: Date for the report. Defaults to today.
-        language: Language code — "en" for English, "fr" for French.
+        french_content: Dict of AI-generated French content (from french_gen).
 
     Returns:
         The rendered report as a string.
     """
+    from morning_report.french_gen import _FALLBACK_MSG
+
     date = date or datetime.now()
     date_str = date.strftime("%Y-%m-%d")
-    day_name = date.strftime("%A")
 
     env = Environment(
         loader=FileSystemLoader(str(_TEMPLATES_DIR)),
@@ -116,29 +104,23 @@ def generate_report(
         lstrip_blocks=True,
     )
     env.filters["weather_fr"] = _weather_fr
-    env.filters["news_cat_fr"] = _news_category_fr
 
-    if language == "fr":
-        template = env.get_template("morning_report_fr.md.j2")
-        day_name_display = french_date(date)
-    else:
-        template = env.get_template("morning_report.md.j2")
-        day_name_display = day_name
+    template = env.get_template("french_learning.md.j2")
 
     rendered = template.render(
         date=date_str,
-        day_name=day_name_display if language == "en" else day_name,
-        date_fr=french_date(date) if language == "fr" else None,
+        date_fr=french_date(date),
         generated_at=datetime.now().strftime("%H:%M"),
         data=data,
+        french_content=french_content or {},
+        fallback_msg=_FALLBACK_MSG,
     )
 
     # Write to file if output_dir specified
     if output_dir:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        suffix = "-fr" if language == "fr" else ""
-        output_path = output_dir / f"{date_str}{suffix}.md"
+        output_path = output_dir / f"{date_str}.md"
         output_path.write_text(rendered)
         logger.info("Report written to %s", output_path)
 

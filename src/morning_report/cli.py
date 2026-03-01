@@ -16,7 +16,7 @@ from morning_report.config import get_project_root, load_config
 
 app = typer.Typer(
     name="morning-report",
-    help="Automated daily morning briefing system.",
+    help="Daily French learning document generator.",
     no_args_is_help=True,
 )
 
@@ -28,23 +28,13 @@ def _register_gatherers():
     """Lazily import and register available gatherers."""
     if _GATHERER_CLASSES:
         return
-    from morning_report.gatherers.email import EmailGatherer
-    from morning_report.gatherers.calendar import CalendarGatherer
-    from morning_report.gatherers.ads import ADSGatherer
-    from morning_report.gatherers.arxiv import ArxivGatherer
-    from morning_report.gatherers.markets import MarketsGatherer
-    from morning_report.gatherers.github import GitHubGatherer
-    from morning_report.gatherers.news import NewsGatherer
     from morning_report.gatherers.weather import WeatherGatherer
+    from morning_report.gatherers.markets import MarketsGatherer
+    from morning_report.gatherers.meditation import MeditationGatherer
 
-    _GATHERER_CLASSES["email"] = EmailGatherer
-    _GATHERER_CLASSES["calendar"] = CalendarGatherer
-    _GATHERER_CLASSES["ads"] = ADSGatherer
-    _GATHERER_CLASSES["arxiv"] = ArxivGatherer
-    _GATHERER_CLASSES["markets"] = MarketsGatherer
-    _GATHERER_CLASSES["github"] = GitHubGatherer
-    _GATHERER_CLASSES["news"] = NewsGatherer
     _GATHERER_CLASSES["weather"] = WeatherGatherer
+    _GATHERER_CLASSES["markets"] = MarketsGatherer
+    _GATHERER_CLASSES["meditation"] = MeditationGatherer
 
 
 def _setup_logging(verbose: bool = False):
@@ -56,73 +46,11 @@ def _setup_logging(verbose: bool = False):
     )
 
 
-def _gather_french_feeds(cfg: dict) -> dict:
-    """Gather French news feeds and meditation feed from config.
-
-    Returns a dict with 'news_fr' and 'meditation' keys, each containing
-    gatherer-style results.
-    """
-    from morning_report.gatherers.news import _parse_feeds
-
-    french_cfg = cfg.get("french", {})
-    results = {}
-
-    # French news feeds
-    fr_feeds = french_cfg.get("news_feeds", {})
-    if fr_feeds:
-        try:
-            articles = _parse_feeds(fr_feeds, max_per_category=5)
-            if "_error" in articles:
-                results["news_fr"] = {"status": "error", "error": articles["_error"]}
-            else:
-                total = sum(len(items) for items in articles.values())
-                results["news_fr"] = {
-                    "status": "ok",
-                    "categories": articles,
-                    "total_articles": total,
-                }
-        except Exception as e:
-            results["news_fr"] = {"status": "error", "error": str(e)}
-    else:
-        results["news_fr"] = {"status": "skipped", "reason": "No French news feeds configured"}
-
-    # Meditation feed (Richard Rohr / CAC)
-    meditation_url = french_cfg.get("meditation_feed", "")
-    if meditation_url:
-        try:
-            articles = _parse_feeds({"meditation": [meditation_url]}, max_per_category=1)
-            if "_error" in articles:
-                results["meditation"] = {"status": "error", "error": articles["_error"]}
-            else:
-                items = articles.get("meditation", [])
-                results["meditation"] = {
-                    "status": "ok",
-                    "items": items,
-                }
-        except Exception as e:
-            results["meditation"] = {"status": "error", "error": str(e)}
-    else:
-        results["meditation"] = {"status": "skipped", "reason": "No meditation feed configured"}
-
-    return results
-
-
-def _should_french(french_flag: bool, cfg: dict) -> bool:
-    """Determine whether to generate the French report."""
-    if french_flag:
-        return True
-    return cfg.get("french", {}).get("enabled", False)
-
-
 @app.command()
 def gather(
     only: Optional[str] = typer.Option(
         None, "--only", "-o",
-        help="Run only a specific gatherer (e.g. email, calendar).",
-    ),
-    french: bool = typer.Option(
-        False, "--french", "--fr",
-        help="Also gather French news feeds and meditation.",
+        help="Run only a specific gatherer (e.g. weather, markets, meditation).",
     ),
     config_path: Optional[Path] = typer.Option(
         None, "--config", "-c",
@@ -160,11 +88,7 @@ def gather(
     for name in names:
         cls = _GATHERER_CLASSES[name]
         gatherer_config = cfg.get(name, {})
-        # ArxivGatherer also needs the ADS config for Tier 1 citation checking
-        if name == "arxiv":
-            gatherer = cls(config=gatherer_config, ads_config=cfg.get("ads", {}))
-        else:
-            gatherer = cls(config=gatherer_config)
+        gatherer = cls(config=gatherer_config)
         typer.echo(f"Gathering: {name}...")
         results[name] = gatherer.safe_gather()
         status = results[name].get("status", "unknown")
@@ -172,18 +96,6 @@ def gather(
             typer.echo(f"  {name}: OK")
         else:
             typer.echo(f"  {name}: {status} — {results[name].get('error', results[name].get('reason', ''))}")
-
-    # Gather French feeds if enabled
-    if _should_french(french, cfg):
-        typer.echo("Gathering: French news feeds...")
-        fr_results = _gather_french_feeds(cfg)
-        results.update(fr_results)
-        for key in ("news_fr", "meditation"):
-            status = results.get(key, {}).get("status", "unknown")
-            if status == "ok":
-                typer.echo(f"  {key}: OK")
-            else:
-                typer.echo(f"  {key}: {status}")
 
     # Save raw data
     output_dir = output or (get_project_root() / "briefings")
@@ -199,17 +111,13 @@ def show(
         None, "--date", "-d",
         help="Date to show report for (YYYY-MM-DD). Defaults to today.",
     ),
-    french: bool = typer.Option(
-        False, "--french", "--fr",
-        help="Also generate the French report.",
-    ),
     config_path: Optional[Path] = typer.Option(
         None, "--config", "-c",
         help="Path to config file.",
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
-    """Generate and display the morning report."""
+    """Generate and display the French learning document."""
     _setup_logging(verbose)
 
     cfg = load_config(config_path)
@@ -234,68 +142,13 @@ def show(
     with open(json_path) as f:
         data = json.load(f)
 
+    # Generate French content via API
+    french_content = _generate_french(data, cfg, date=report_date)
+
     from morning_report.report.generator import generate_report
-
-    # Generate English report
-    report = generate_report(data, output_dir=briefings_dir, date=report_date)
+    report = generate_report(data, output_dir=briefings_dir, date=report_date,
+                             french_content=french_content)
     typer.echo(report)
-
-    # Generate French report if enabled
-    if _should_french(french, cfg):
-        report_fr = generate_report(data, output_dir=briefings_dir, date=report_date, language="fr")
-        typer.echo(f"\nFrench report written to {briefings_dir}/{date_str}-fr.md")
-
-
-@app.command()
-def run(
-    french: bool = typer.Option(
-        False, "--french", "--fr",
-        help="Also generate the French report.",
-    ),
-    config_path: Optional[Path] = typer.Option(
-        None, "--config", "-c",
-        help="Path to config file.",
-    ),
-    verbose: bool = typer.Option(False, "--verbose", "-v"),
-):
-    """Gather data and immediately show the report (convenience command)."""
-    _setup_logging(verbose)
-
-    # Gather
-    cfg = load_config(config_path)
-    _register_gatherers()
-
-    results = {}
-    for name, cls in _GATHERER_CLASSES.items():
-        gatherer_config = cfg.get(name, {})
-        if name == "arxiv":
-            gatherer = cls(config=gatherer_config, ads_config=cfg.get("ads", {}))
-        else:
-            gatherer = cls(config=gatherer_config)
-        typer.echo(f"Gathering: {name}...")
-        results[name] = gatherer.safe_gather()
-        status = results[name].get("status", "unknown")
-        if status != "ok":
-            typer.echo(f"  {name}: {status}")
-
-    # Gather French feeds if enabled
-    if _should_french(french, cfg):
-        typer.echo("Gathering: French news feeds...")
-        fr_results = _gather_french_feeds(cfg)
-        results.update(fr_results)
-
-    # Save and render
-    briefings_dir = get_project_root() / "briefings"
-    from morning_report.report.generator import save_gathered_data, generate_report
-    save_gathered_data(results, briefings_dir)
-    report = generate_report(results, output_dir=briefings_dir)
-    typer.echo("\n" + report)
-
-    # French report
-    if _should_french(french, cfg):
-        generate_report(results, output_dir=briefings_dir, language="fr")
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        typer.echo(f"\nFrench report written to {briefings_dir}/{date_str}-fr.md")
 
 
 @app.command()
@@ -303,10 +156,6 @@ def export(
     date: Optional[str] = typer.Option(
         None, "--date", "-d",
         help="Date to export (YYYY-MM-DD). Defaults to today.",
-    ),
-    french: bool = typer.Option(
-        False, "--french", "--fr",
-        help="Also export the French report.",
     ),
     config_path: Optional[Path] = typer.Option(
         None, "--config", "-c",
@@ -317,7 +166,6 @@ def export(
     """Export the markdown report to a Word document (.docx) via pandoc."""
     _setup_logging(verbose)
 
-    cfg = load_config(config_path)
     date_str = date or datetime.now().strftime("%Y-%m-%d")
     briefings_dir = get_project_root() / "briefings"
     md_path = briefings_dir / f"{date_str}.md"
@@ -333,15 +181,6 @@ def export(
     docx_path = export_docx(md_path)
     typer.echo(f"Exported: {docx_path}")
 
-    # Export French report if enabled
-    if _should_french(french, cfg):
-        md_fr_path = briefings_dir / f"{date_str}-fr.md"
-        if md_fr_path.exists():
-            docx_fr_path = export_docx(md_fr_path)
-            typer.echo(f"Exported: {docx_fr_path}")
-        else:
-            typer.echo(f"No French markdown report found for {date_str}. Skipping French export.")
-
 
 @app.command()
 def email(
@@ -355,7 +194,7 @@ def email(
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
-    """Email the morning report (.docx) with a summary body."""
+    """Email the French learning document (.docx) with a summary body."""
     _setup_logging(verbose)
 
     date_str = date or datetime.now().strftime("%Y-%m-%d")
@@ -373,19 +212,36 @@ def email(
     cfg = load_config(config_path)
     email_cfg = cfg.get("automation", {}).get("email", {})
 
-    # Check for French .docx
-    docx_fr_path = briefings_dir / f"{date_str}-fr.docx"
-    fr_path = docx_fr_path if docx_fr_path.exists() else None
-
     from morning_report.report.emailer import send_report
     send_report(
         docx_path=docx_path,
         json_path=json_path,
         recipient=email_cfg.get("recipient", "snlongmore@gmail.com"),
         sender=email_cfg.get("sender", "snlongmore@gmail.com"),
-        docx_fr_path=fr_path,
     )
     typer.echo(f"Report emailed to {email_cfg.get('recipient', 'snlongmore@gmail.com')}")
+
+
+def _generate_french(data: dict, cfg: dict, date: datetime | None = None) -> dict:
+    """Generate French content via the Anthropic API.
+
+    Returns a dict of French content, or an empty dict on failure.
+    """
+    french_cfg = cfg.get("french", {})
+    try:
+        from morning_report.french_gen import generate_french_content
+        return generate_french_content(
+            weather_data=data.get("weather", {}),
+            markets_data=data.get("markets", {}),
+            meditation_data=data.get("meditation", {}),
+            level=french_cfg.get("level", "B1"),
+            model=french_cfg.get("model"),
+            api_key=french_cfg.get("api_key"),
+            date=date,
+        )
+    except Exception as e:
+        logging.getLogger("morning_report").error("French generation failed: %s", e)
+        return {}
 
 
 @app.command()
@@ -396,7 +252,7 @@ def auto(
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
-    """Run the full pipeline: gather → show → export → email."""
+    """Run the full pipeline: gather → generate → export → email."""
     _setup_logging(verbose)
     logger = logging.getLogger("morning_report")
 
@@ -411,10 +267,7 @@ def auto(
     results = {}
     for name, cls in _GATHERER_CLASSES.items():
         gatherer_config = cfg.get(name, {})
-        if name == "arxiv":
-            gatherer = cls(config=gatherer_config, ads_config=cfg.get("ads", {}))
-        else:
-            gatherer = cls(config=gatherer_config)
+        gatherer = cls(config=gatherer_config)
         typer.echo(f"  Gathering: {name}...")
         results[name] = gatherer.safe_gather()
         status = results[name].get("status", "unknown")
@@ -423,47 +276,32 @@ def auto(
         else:
             typer.echo(f"    {name}: {status}")
 
-    # Gather French feeds if enabled
-    do_french = _should_french(False, cfg)
-    if do_french:
-        typer.echo("  Gathering: French news feeds...")
-        fr_results = _gather_french_feeds(cfg)
-        results.update(fr_results)
-        for key in ("news_fr", "meditation"):
-            status = results.get(key, {}).get("status", "unknown")
-            typer.echo(f"    {key}: {status}")
-
     from morning_report.report.generator import save_gathered_data, generate_report
     save_gathered_data(results, briefings_dir)
     typer.echo(f"  Data saved to {briefings_dir}/{date_str}.json")
 
-    # Step 2: Show (render markdown)
-    typer.echo("\n=== Step 2/4: Rendering markdown ===")
-    report = generate_report(results, output_dir=briefings_dir)
-    typer.echo(f"  Report written to {briefings_dir}/{date_str}.md")
+    # Step 2: Generate French content + render markdown
+    typer.echo("\n=== Step 2/4: Generating French content ===")
+    french_content = _generate_french(results, cfg)
+    if french_content.get("_error"):
+        typer.echo(f"  Warning: {french_content['_error']}")
+    else:
+        typer.echo("  French content generated OK")
 
-    if do_french:
-        generate_report(results, output_dir=briefings_dir, language="fr")
-        typer.echo(f"  French report written to {briefings_dir}/{date_str}-fr.md")
+    report = generate_report(results, output_dir=briefings_dir, french_content=french_content)
+    typer.echo(f"  Report written to {briefings_dir}/{date_str}.md")
 
     # Step 3: Export to .docx
     typer.echo("\n=== Step 3/4: Exporting to Word ===")
     md_path = briefings_dir / f"{date_str}.md"
-    docx_fr_path = None
+    docx_path = None
     try:
         from morning_report.report.exporter import export_docx
         docx_path = export_docx(md_path)
         typer.echo(f"  Exported: {docx_path}")
-
-        if do_french:
-            md_fr_path = briefings_dir / f"{date_str}-fr.md"
-            if md_fr_path.exists():
-                docx_fr_path = export_docx(md_fr_path)
-                typer.echo(f"  Exported: {docx_fr_path}")
     except (RuntimeError, FileNotFoundError, OSError) as e:
         typer.echo(f"  Export failed: {e}", err=True)
         typer.echo("  Report is still available as markdown.")
-        docx_path = None
 
     # Step 4: Email
     typer.echo("\n=== Step 4/4: Emailing report ===")
@@ -482,7 +320,6 @@ def auto(
                 json_path=json_path,
                 recipient=email_cfg.get("recipient", "snlongmore@gmail.com"),
                 sender=email_cfg.get("sender", "snlongmore@gmail.com"),
-                docx_fr_path=docx_fr_path,
             )
             typer.echo(f"  Report emailed to {email_cfg.get('recipient', 'snlongmore@gmail.com')}")
         except ValueError as e:

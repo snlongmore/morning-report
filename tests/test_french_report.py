@@ -1,9 +1,7 @@
-"""Tests for French report generation."""
+"""Tests for French learning report generation."""
 
-import json
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -13,16 +11,8 @@ from morning_report.report.generator import (
     FRENCH_DAYS,
     FRENCH_MONTHS,
     WEATHER_FR,
-    NEWS_CATEGORIES_FR,
     _weather_fr,
-    _news_category_fr,
 )
-from morning_report.report.emailer import (
-    _build_summary_fr,
-    _build_subject_fr,
-    build_message,
-)
-from morning_report.gatherers.news import _parse_feeds
 
 
 # -- Shared test data --------------------------------------------------------
@@ -42,37 +32,6 @@ SAMPLE_DATA = {
             }
         },
     },
-    "calendar": {
-        "status": "ok",
-        "today": [
-            {
-                "title": "Research Group Meeting",
-                "start": "2026-02-26T10:00:00",
-                "end": "2026-02-26T11:00:00",
-                "calendar": "Research Group",
-                "location": "Byrom Street",
-                "all_day": False,
-            },
-        ],
-        "upcoming": [],
-        "events": [
-            {"start": "2026-02-26T10:00:00", "title": "Research Group Meeting"},
-        ],
-        "date_range": {"from": "2026-02-26", "to": "2026-02-28"},
-    },
-    "email": {
-        "status": "ok",
-        "total_unread": 14,
-        "account_summary": {
-            "LJMU": 5,
-            "snlongmore@gmail.com": 9,
-        },
-        "accounts": {
-            "LJMU": [{"sender": "a@b.com", "subject": "hi"}] * 5,
-            "snlongmore@gmail.com": [{"sender": "c@d.com", "subject": "hello"}] * 9,
-        },
-        "needs_response": [],
-    },
     "markets": {
         "status": "ok",
         "crypto": {
@@ -81,55 +40,49 @@ SAMPLE_DATA = {
         },
         "stocks": {},
     },
-    "arxiv": {
-        "status": "ok",
-        "total_new": 26,
-        "categories_searched": ["astro-ph.GA", "astro-ph.SR"],
-        "tiers": {"1": [], "2": [], "3": []},
-        "papers": [{"title": f"Paper {i}", "tier": 3} for i in range(26)],
-    },
-    "news": {
-        "status": "ok",
-        "categories": {
-            "Astronomy": [
-                {"title": "New Star Found", "link": "http://example.com", "source": "NASA"},
-            ],
-        },
-        "total_articles": 1,
-    },
-    "news_fr": {
-        "status": "ok",
-        "categories": {
-            "IA et technologie": [
-                {
-                    "title": "L'IA revolutionne la recherche",
-                    "link": "http://lemonde.fr/article",
-                    "source": "Le Monde",
-                    "summary": "Un article sur l'intelligence artificielle.",
-                },
-            ],
-            "Football": [
-                {
-                    "title": "PSG bat Marseille 3-1",
-                    "link": "http://lequipe.fr/article",
-                    "source": "L'Equipe",
-                },
-            ],
-        },
-        "total_articles": 2,
-    },
     "meditation": {
         "status": "ok",
         "items": [
             {
                 "title": "The Power of Letting Go",
                 "summary": "Today's meditation focuses on surrender.",
-                "content": "<p>Richard Rohr reflects on the practice of letting go...</p>",
+                "content": "Richard Rohr reflects on the practice of letting go.",
                 "link": "http://cac.org/meditation",
                 "published": "2026-02-26",
                 "source": "Center for Action and Contemplation",
             },
         ],
+    },
+}
+
+SAMPLE_FRENCH_CONTENT = {
+    "meditation_fr": "Richard Rohr reflechit sur la pratique du lacher prise.",
+    "poem": {
+        "text": "La pluie tombe doucement\nSur les toits gris du matin",
+        "author": "Anonyme",
+    },
+    "history": {
+        "year": 1872,
+        "text": "Le premier parc national, Yellowstone, a ete cree.",
+    },
+    "vocabulary": [
+        {"fr": "la pluie", "en": "rain", "example": "La pluie tombe sur la ville."},
+        {"fr": "le marche", "en": "market", "example": "Le marche est en hausse."},
+    ],
+    "expression": {
+        "fr": "Apres la pluie, le beau temps",
+        "en": "Every cloud has a silver lining",
+        "example": "Ne t'inquiete pas, apres la pluie, le beau temps !",
+    },
+    "grammar": {
+        "rule": "Le passe compose avec avoir",
+        "explanation": "Use avoir + past participle for most verbs.",
+        "examples": ["J'ai reflechi", "Il a lache prise"],
+    },
+    "exercise": {
+        "instruction": "Completez avec le mot correct :",
+        "questions": ["La ___ tombe doucement.", "Le ___ est en hausse."],
+        "answers": ["pluie", "marche"],
     },
 }
 
@@ -160,270 +113,121 @@ class TestFrenchDateHelpers:
         assert result == "jeudi 25 decembre 2025"
 
 
-# -- French report generation -----------------------------------------------
+# -- Report generation -------------------------------------------------------
 
-class TestFrenchReportGeneration:
+class TestReportGeneration:
     def test_generates_french_report(self, tmp_path):
-        report = generate_report(SAMPLE_DATA, output_dir=tmp_path, language="fr")
-        assert "Rapport du matin" in report
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path,
+                                 french_content=SAMPLE_FRENCH_CONTENT)
+        assert "Francais du jour" in report
 
-    def test_french_report_filename(self, tmp_path):
+    def test_report_filename(self, tmp_path):
         dt = datetime(2026, 2, 26)
-        generate_report(SAMPLE_DATA, output_dir=tmp_path, date=dt, language="fr")
-        assert (tmp_path / "2026-02-26-fr.md").exists()
-
-    def test_english_report_filename_unchanged(self, tmp_path):
-        dt = datetime(2026, 2, 26)
-        generate_report(SAMPLE_DATA, output_dir=tmp_path, date=dt, language="en")
+        generate_report(SAMPLE_DATA, output_dir=tmp_path, date=dt,
+                        french_content=SAMPLE_FRENCH_CONTENT)
         assert (tmp_path / "2026-02-26.md").exists()
-        assert not (tmp_path / "2026-02-26-fr.md").exists()
 
-    def test_french_report_has_french_headers(self, tmp_path):
-        report = generate_report(SAMPLE_DATA, output_dir=tmp_path, language="fr")
-        assert "Emploi du temps" in report
-        assert "Resume des courriels" in report
-        assert "Marches" in report
-        assert "Meteo" in report
-
-    def test_french_report_has_french_date(self, tmp_path):
+    def test_has_french_date(self, tmp_path):
         dt = datetime(2026, 2, 26)
-        report = generate_report(SAMPLE_DATA, output_dir=tmp_path, date=dt, language="fr")
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path, date=dt,
+                                 french_content=SAMPLE_FRENCH_CONTENT)
         assert "jeudi 26 fevrier 2026" in report
 
-    def test_french_report_calendar_section(self, tmp_path):
-        report = generate_report(SAMPLE_DATA, output_dir=tmp_path, language="fr")
-        assert "Heure" in report
-        assert "Evenement" in report
-        assert "Calendrier" in report
-
-    def test_french_report_no_events(self, tmp_path):
-        data = {
-            "calendar": {
-                "status": "ok",
-                "today": [],
-                "upcoming": [],
-                "date_range": {"from": "2026-02-26", "to": "2026-02-28"},
-            },
-        }
-        report = generate_report(data, output_dir=tmp_path, language="fr")
-        assert "Aucun evenement" in report
-
-    def test_french_report_markets_section(self, tmp_path):
-        report = generate_report(SAMPLE_DATA, output_dir=tmp_path, language="fr")
-        assert "Variation 24h" in report
-        assert "Jeton" in report
-
-    def test_french_report_weather_section(self, tmp_path):
-        report = generate_report(SAMPLE_DATA, output_dir=tmp_path, language="fr")
+    def test_weather_section(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path,
+                                 french_content=SAMPLE_FRENCH_CONTENT)
+        assert "Meteo" in report
         assert "humidite" in report
         assert "vent" in report
 
-    def test_french_report_arxiv_section(self, tmp_path):
-        report = generate_report(SAMPLE_DATA, output_dir=tmp_path, language="fr")
-        assert "Veille arXiv" in report
-        assert "nouveaux articles" in report
+    def test_weather_translated(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path,
+                                 french_content=SAMPLE_FRENCH_CONTENT)
+        assert "ciel couvert" in report.lower()
 
-    def test_french_report_news_fr_section(self, tmp_path):
-        report = generate_report(SAMPLE_DATA, output_dir=tmp_path, language="fr")
-        assert "Revue de presse francaise" in report
-        assert "L'IA revolutionne la recherche" in report
+    def test_markets_section(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path,
+                                 french_content=SAMPLE_FRENCH_CONTENT)
+        assert "Marches" in report
+        assert "Jeton" in report
+        assert "Variation 24h" in report
 
-    def test_french_report_meditation_section(self, tmp_path):
-        report = generate_report(SAMPLE_DATA, output_dir=tmp_path, language="fr")
+    def test_meditation_section(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path,
+                                 french_content=SAMPLE_FRENCH_CONTENT)
         assert "Meditation du jour" in report
         assert "The Power of Letting Go" in report
 
-    def test_french_report_no_placeholder_sections(self, tmp_path):
-        """Template should not include empty placeholder sections — those are skill-only."""
-        report = generate_report(SAMPLE_DATA, output_dir=tmp_path, language="fr")
+    def test_meditation_french_translation(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path,
+                                 french_content=SAMPLE_FRENCH_CONTENT)
+        assert "lacher prise" in report
+
+    def test_meditation_fallback_to_english(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path,
+                                 french_content={})
+        assert "Traduction indisponible" in report
+        assert "letting go" in report
+
+    def test_poem_section(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path,
+                                 french_content=SAMPLE_FRENCH_CONTENT)
+        assert "Poeme du jour" in report
+        assert "pluie tombe doucement" in report
+        assert "Anonyme" in report
+
+    def test_history_section(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path,
+                                 french_content=SAMPLE_FRENCH_CONTENT)
+        assert "Ce jour dans l'histoire" in report
+        assert "1872" in report
+        assert "Yellowstone" in report
+
+    def test_vocabulary_section(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path,
+                                 french_content=SAMPLE_FRENCH_CONTENT)
+        assert "Vocabulaire" in report
+        assert "la pluie" in report
+        assert "rain" in report
+
+    def test_expression_section(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path,
+                                 french_content=SAMPLE_FRENCH_CONTENT)
+        assert "Expression du jour" in report
+        assert "Apres la pluie" in report
+
+    def test_grammar_section(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path,
+                                 french_content=SAMPLE_FRENCH_CONTENT)
+        assert "Point de grammaire" in report
+        assert "passe compose" in report
+
+    def test_exercise_section(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path,
+                                 french_content=SAMPLE_FRENCH_CONTENT)
+        assert "Exercice" in report
+        assert "Completez" in report
+        assert "Reponses" in report
+
+    def test_report_ends_correctly(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path,
+                                 french_content=SAMPLE_FRENCH_CONTENT)
+        assert "bonne journee" in report
+
+    def test_no_placeholder_sections(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path,
+                                 french_content=SAMPLE_FRENCH_CONTENT)
         assert "Section completee par le skill" not in report
 
-    def test_french_report_ends_with_french(self, tmp_path):
-        report = generate_report(SAMPLE_DATA, output_dir=tmp_path, language="fr")
-        assert "Fin du rapport du matin" in report
+    def test_empty_data_graceful(self, tmp_path):
+        report = generate_report({}, output_dir=tmp_path, french_content={})
+        assert "Francais du jour" in report
+        assert "bonne journee" in report
 
-    def test_english_report_unchanged(self, tmp_path):
-        report = generate_report(SAMPLE_DATA, output_dir=tmp_path, language="en")
-        assert "Morning Report" in report
-        assert "Today's Schedule" in report
-        assert "Email Summary" in report
-        assert "End of morning report" in report
-
-
-# -- News gatherer summary/content extraction --------------------------------
-
-class TestNewsSummaryExtraction:
-    def test_summary_field_extracted(self):
-        mock_feed = MagicMock()
-        mock_feed.feed.get.return_value = "Test Feed"
-        mock_entry = MagicMock()
-        mock_entry.get.side_effect = lambda key, default="": {
-            "title": "Test Article",
-            "link": "http://example.com",
-            "published": "2026-02-26",
-            "summary": "This is the article summary.",
-            "content": [{"value": "<p>Full content here.</p>"}],
-        }.get(key, default)
-        mock_feed.entries = [mock_entry]
-
-        mock_feedparser = MagicMock()
-        mock_feedparser.parse.return_value = mock_feed
-
-        with patch.dict("sys.modules", {"feedparser": mock_feedparser}):
-            with patch("morning_report.gatherers.news.feedparser", mock_feedparser, create=True):
-                result = _parse_feeds({"Test": ["http://example.com/rss"]})
-
-        article = result["Test"][0]
-        assert article["summary"] == "This is the article summary."
-        assert article["content"] == "Full content here."
-
-    def test_missing_summary_not_included(self):
-        mock_feed = MagicMock()
-        mock_feed.feed.get.return_value = "Test Feed"
-        mock_entry = MagicMock()
-        mock_entry.get.side_effect = lambda key, default="": {
-            "title": "No Summary Article",
-            "link": "http://example.com",
-            "published": "2026-02-26",
-        }.get(key, default)
-        mock_feed.entries = [mock_entry]
-
-        mock_feedparser = MagicMock()
-        mock_feedparser.parse.return_value = mock_feed
-
-        with patch.dict("sys.modules", {"feedparser": mock_feedparser}):
-            with patch("morning_report.gatherers.news.feedparser", mock_feedparser, create=True):
-                result = _parse_feeds({"Test": ["http://example.com/rss"]})
-
-        article = result["Test"][0]
-        assert "summary" not in article
-        assert "content" not in article
-
-
-# -- French email summary ---------------------------------------------------
-
-class TestFrenchEmailSummary:
-    def test_build_summary_fr_includes_meteo(self):
-        summary = _build_summary_fr(SAMPLE_DATA)
-        assert "Meteo" in summary
-        assert "West Kirby" in summary
-
-    def test_build_summary_fr_includes_agenda(self):
-        summary = _build_summary_fr(SAMPLE_DATA)
-        assert "Agenda" in summary
-        assert "evenements" in summary
-
-    def test_build_summary_fr_includes_courriels(self):
-        summary = _build_summary_fr(SAMPLE_DATA)
-        assert "Courriels" in summary
-        assert "non lus" in summary
-
-    def test_build_summary_fr_includes_arxiv(self):
-        summary = _build_summary_fr(SAMPLE_DATA)
-        assert "arXiv" in summary
-        assert "nouveaux articles" in summary
-
-    def test_build_summary_fr_includes_marches(self):
-        summary = _build_summary_fr(SAMPLE_DATA)
-        assert "Marches" in summary
-        assert "BTC" in summary
-
-    def test_build_summary_fr_includes_pieces_jointes(self):
-        summary = _build_summary_fr(SAMPLE_DATA)
-        assert "pieces jointes" in summary
-
-    def test_build_summary_fr_empty_data(self):
-        summary = _build_summary_fr({})
-        assert "Rapport du matin" in summary
-        assert "pieces jointes" in summary
-
-    def test_build_subject_fr(self):
-        subject = _build_subject_fr()
-        assert "Rapport du matin" in subject
-
-
-# -- Dual attachment email ---------------------------------------------------
-
-class TestDualAttachmentEmail:
-    def test_build_message_with_french_docx(self, tmp_path):
-        docx_path = tmp_path / "2026-02-26.docx"
-        docx_path.write_bytes(b"fake english docx")
-        docx_fr_path = tmp_path / "2026-02-26-fr.docx"
-        docx_fr_path.write_bytes(b"fake french docx")
-        json_path = tmp_path / "2026-02-26.json"
-        json_path.write_text(json.dumps(SAMPLE_DATA))
-
-        msg = build_message(
-            docx_path=docx_path,
-            json_path=json_path,
-            recipient="test@example.com",
-            sender="sender@example.com",
-            docx_fr_path=docx_fr_path,
-        )
-
-        # Should have 3 parts: text body + 2 attachments
-        parts = list(msg.iter_parts())
-        assert len(parts) == 3
-        filenames = [p.get_filename() for p in parts if p.get_filename()]
-        assert "2026-02-26.docx" in filenames
-        assert "2026-02-26-fr.docx" in filenames
-
-    def test_build_message_french_subject(self, tmp_path):
-        docx_path = tmp_path / "report.docx"
-        docx_path.write_bytes(b"fake docx")
-        docx_fr_path = tmp_path / "report-fr.docx"
-        docx_fr_path.write_bytes(b"fake french docx")
-        json_path = tmp_path / "report.json"
-        json_path.write_text(json.dumps(SAMPLE_DATA))
-
-        msg = build_message(
-            docx_path=docx_path,
-            json_path=json_path,
-            recipient="test@example.com",
-            sender="sender@example.com",
-            docx_fr_path=docx_fr_path,
-        )
-
-        assert "Rapport du matin" in msg["Subject"]
-
-    def test_build_message_french_body(self, tmp_path):
-        docx_path = tmp_path / "report.docx"
-        docx_path.write_bytes(b"fake docx")
-        docx_fr_path = tmp_path / "report-fr.docx"
-        docx_fr_path.write_bytes(b"fake french docx")
-        json_path = tmp_path / "report.json"
-        json_path.write_text(json.dumps(SAMPLE_DATA))
-
-        msg = build_message(
-            docx_path=docx_path,
-            json_path=json_path,
-            recipient="test@example.com",
-            sender="sender@example.com",
-            docx_fr_path=docx_fr_path,
-        )
-
-        body = msg.get_body(preferencelist=("plain",)).get_content()
-        assert "pieces jointes" in body
-
-    def test_build_message_without_french_is_english(self, tmp_path):
-        docx_path = tmp_path / "report.docx"
-        docx_path.write_bytes(b"fake docx")
-        json_path = tmp_path / "report.json"
-        json_path.write_text(json.dumps(SAMPLE_DATA))
-
-        msg = build_message(
-            docx_path=docx_path,
-            json_path=json_path,
-            recipient="test@example.com",
-            sender="sender@example.com",
-        )
-
-        assert "Morning Report" in msg["Subject"]
-        body = msg.get_body(preferencelist=("plain",)).get_content()
-        assert "Full report attached" in body
-
-        parts = list(msg.iter_parts())
-        assert len(parts) == 2  # text + 1 attachment
+    def test_no_french_content_still_renders(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path)
+        assert "Francais du jour" in report
+        assert "Meteo" in report
 
 
 # -- Weather translation ---------------------------------------------------
@@ -442,37 +246,7 @@ class TestWeatherTranslation:
     def test_unknown_falls_back(self):
         assert _weather_fr("volcanic ash") == "volcanic ash"
 
-    def test_weather_in_french_report(self, tmp_path):
-        report = generate_report(SAMPLE_DATA, output_dir=tmp_path, language="fr")
+    def test_weather_in_report(self, tmp_path):
+        report = generate_report(SAMPLE_DATA, output_dir=tmp_path)
         assert "ciel couvert" in report.lower()
         assert "overcast clouds" not in report.lower()
-
-
-# -- News category translation ---------------------------------------------
-
-class TestNewsCategoryTranslation:
-    def test_known_categories(self):
-        assert _news_category_fr("Astronomy") == "Astronomie"
-        assert _news_category_fr("Shipping") == "Transport maritime"
-        assert _news_category_fr("AI/ML") == "IA/ML"
-
-    def test_unknown_falls_back(self):
-        assert _news_category_fr("Sports") == "Sports"
-
-    def test_categories_translated_in_report(self, tmp_path):
-        report = generate_report(SAMPLE_DATA, output_dir=tmp_path, language="fr")
-        assert "### Astronomie" in report
-
-
-# -- HTML stripping --------------------------------------------------------
-
-class TestHtmlStripping:
-    def test_strip_html_in_news(self):
-        from morning_report.gatherers.news import _strip_html
-        assert _strip_html("<p>Hello <b>world</b></p>") == "Hello world"
-        assert _strip_html("No tags here") == "No tags here"
-        assert _strip_html("<div><p>Nested</p></div>") == "Nested"
-
-    def test_strip_html_whitespace(self):
-        from morning_report.gatherers.news import _strip_html
-        assert _strip_html("<p>Line one</p>\n\n<p>Line two</p>") == "Line one Line two"
