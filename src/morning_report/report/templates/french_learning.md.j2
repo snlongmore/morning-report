@@ -1,0 +1,209 @@
+# Francais du jour — {{ date_fr }}
+
+*Genere a {{ generated_at }}*
+
+---
+
+{% if data.get('weather') and data.weather.status == 'ok' %}
+## Meteo
+
+{% for location, info in data.weather.locations.items() %}
+### {{ location }}
+
+{% if info.current is defined %}
+**{{ info.current.description | weather_fr | capitalize }}** — {{ info.current.temp }}°C (ressenti {{ info.current.feels_like }}°C), humidite {{ info.current.humidity }}%, vent {{ info.current.wind_speed }} m/s
+{% endif %}
+
+{% if info.forecast is defined %}
+| Heure | Prevision | Temperature |
+|-------|-----------|-------------|
+{% for f in info.forecast %}
+| {{ f.time[11:16] if f.time|length > 11 else f.time }} | {{ f.description | weather_fr }} | {{ f.temp }}°C |
+{% endfor %}
+{% endif %}
+
+{% if info.error is defined %}
+> Meteo indisponible : {{ info.error }}
+{% endif %}
+{% endfor %}
+
+{% elif data.get('weather') and data.weather.status == 'skipped' %}
+## Meteo
+
+> Meteo ignoree : {{ data.weather.reason }}
+
+{% elif data.get('weather') and data.weather.status == 'error' %}
+## Meteo
+
+> Erreur meteo : {{ data.weather.error }}
+
+{% endif %}
+---
+
+{% if data.get('markets') and data.markets.status == 'ok' %}
+## Marches
+
+{% if data.markets.crypto %}
+### Crypto
+
+| Jeton | Prix (USD) | Variation 24h |
+|-------|------------|---------------|
+{% for id, info in data.markets.crypto.items() %}
+{% if info.price_usd is defined %}| **{{ id }}** | ${{ "%.2f" | format(info.price_usd) if info.price_usd >= 1 else "%.6f" | format(info.price_usd) }} | {{ "%.1f" | format(info.change_24h_pct) }}% |
+{% else %}| **{{ id }}** | {{ info.error }} | — |
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if data.markets.stocks %}
+### Indices et fonds
+
+| Ticker | Prix | Variation |
+|--------|------|-----------|
+{% for ticker, info in data.markets.stocks.items() %}
+{% if info.price is defined %}| **{{ ticker }}** | {{ "%.2f" | format(info.price) }} {{ info.currency }} | {{ "%.1f" | format(info.change_pct) if info.change_pct is not none else '—' }}% |
+{% else %}| **{{ ticker }}** | {{ info.error }} | — |
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if data.markets.stocks_error %}
+> Indices/fonds indisponibles : {{ data.markets.stocks_error }}
+{% endif %}
+
+{% elif data.get('markets') and data.markets.status == 'error' %}
+## Marches
+
+> Erreur des marches : {{ data.markets.error }}
+
+{% endif %}
+---
+
+## Meditation du jour — Richard Rohr
+
+{% if data.get('meditation') and data.meditation.status == 'ok' %}
+{% set med_items = data.meditation['items'] %}
+{% if med_items %}
+{% set med = med_items[0] %}
+**{{ med.title }}**
+
+{% if french_content and french_content.meditation_fr and french_content.meditation_fr != fallback_msg %}
+{{ french_content.meditation_fr }}
+{% else %}
+{% set med_text = med.content or med.summary or '' %}
+{{ med_text }}
+
+*[Traduction indisponible — texte original en anglais]*
+{% endif %}
+
+{% if med.link %}*[Lire la meditation complete]({{ med.link }})*{% endif %}
+{% else %}
+Aucune meditation disponible aujourd'hui.
+{% endif %}
+{% elif data.get('meditation') and data.meditation.status == 'error' %}
+> Erreur : {{ data.meditation.error }}
+{% else %}
+Meditation indisponible.
+{% endif %}
+
+---
+
+{% if french_content and french_content.poem and french_content.poem != fallback_msg %}
+## Poeme du jour
+
+{% if french_content.poem is mapping %}
+{{ french_content.poem.text }}
+
+— *{{ french_content.poem.author }}*
+{% else %}
+{{ french_content.poem }}
+{% endif %}
+
+---
+
+{% endif %}
+{% if french_content and french_content.history and french_content.history != fallback_msg %}
+## Ce jour dans l'histoire
+
+{% if french_content.history is mapping %}
+**{{ french_content.history.year }}** — {{ french_content.history.text }}
+{% else %}
+{{ french_content.history }}
+{% endif %}
+
+---
+
+{% endif %}
+## Lecon du jour
+
+{% if french_content and french_content.vocabulary and french_content.vocabulary != fallback_msg %}
+### Vocabulaire
+
+{% if french_content.vocabulary is iterable and french_content.vocabulary is not string %}
+| Francais | Anglais | Exemple |
+|----------|---------|---------|
+{% for word in french_content.vocabulary %}
+{% if word is mapping %}| **{{ word.fr }}** | {{ word.en }} | *{{ word.example }}* |
+{% endif %}
+{% endfor %}
+{% else %}
+{{ french_content.vocabulary }}
+{% endif %}
+{% else %}
+*Vocabulaire indisponible aujourd'hui.*
+{% endif %}
+
+{% if french_content and french_content.expression and french_content.expression != fallback_msg %}
+### Expression du jour
+
+{% if french_content.expression is mapping %}
+**{{ french_content.expression.fr }}** — {{ french_content.expression.en }}
+
+*{{ french_content.expression.example }}*
+{% else %}
+{{ french_content.expression }}
+{% endif %}
+{% endif %}
+
+{% if french_content and french_content.grammar and french_content.grammar != fallback_msg %}
+### Point de grammaire
+
+{% if french_content.grammar is mapping %}
+**{{ french_content.grammar.rule }}**
+
+{{ french_content.grammar.explanation }}
+
+{% for ex in french_content.grammar.examples %}
+- *{{ ex }}*
+{% endfor %}
+{% else %}
+{{ french_content.grammar }}
+{% endif %}
+{% endif %}
+
+{% if french_content and french_content.exercise and french_content.exercise != fallback_msg %}
+### Exercice
+
+{% if french_content.exercise is mapping %}
+{{ french_content.exercise.instruction }}
+
+{% for q in french_content.exercise.questions %}
+{{ loop.index }}. {{ q }}
+{% endfor %}
+
+<details>
+<summary>Reponses</summary>
+
+{% for a in french_content.exercise.answers %}
+{{ loop.index }}. {{ a }}
+{% endfor %}
+
+</details>
+{% else %}
+{{ french_content.exercise }}
+{% endif %}
+{% endif %}
+
+---
+
+*Fin du document — bonne journee !*
