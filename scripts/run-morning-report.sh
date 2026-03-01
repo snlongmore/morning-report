@@ -10,7 +10,7 @@ if [[ -f "$HOME/.zshenv" ]]; then
 fi
 
 # Ensure Homebrew/miniforge/Claude Code binaries are on PATH (launchd has minimal PATH)
-export PATH="$HOME/.claude/local/bin:/Users/stevenlongmore/miniforge3/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+export PATH="$HOME/.local/bin:/Users/stevenlongmore/miniforge3/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 # Activate the project virtual environment
 VENV="/Users/stevenlongmore/GitHub_repos/snl/morning_report/.venv/bin/activate"
