@@ -1,59 +1,40 @@
 # Morning Report — Project Instructions
 
 ## What This Is
-An automated daily morning briefing system for Steve Longmore. Gathers data from email, calendar, ADS, arXiv, markets, GitHub, news, and weather; classifies, summarises, and produces a structured markdown report.
+An automated daily French learning document generator. Gathers weather, markets, and a daily meditation; uses the Anthropic API to generate French translations, vocabulary, grammar, poetry, and exercises; produces a structured markdown document.
 
 ## Architecture
 - **Python CLI** (`morning-report`) using Typer
-- **Gatherers** (`src/morning_report/gatherers/`) — each implements `BaseGatherer` ABC
+- **Gatherers** (`src/morning_report/gatherers/`) — weather, markets, meditation (each implements `BaseGatherer` ABC)
+- **French generator** (`src/morning_report/french_gen.py`) — single Anthropic API call for all French content
 - **Report generator** (`src/morning_report/report/`) — Jinja2 template rendering
 - **Config** (`config/config.yaml`) — YAML with env var expansion
 
 ## Key Conventions
 - All gatherers return `dict` from `gather()` — JSON-serialisable
-- AppleScript calls use `subprocess.run(["osascript", "-e", ...])` — never `os.system`
 - Config secrets use `${ENV_VAR}` syntax, resolved at load time
 - Reports written to `briefings/YYYY-MM-DD.md`
-- Papers downloaded to `papers/YYYY-MM-DD/`
 - Source code lives in `src/morning_report/` (src layout)
+- French content generated via `claude-haiku-4-5` (configurable in `french.model`)
 
 ## Running
 ```bash
 # Install in dev mode
-uv pip install -e ".[dev]"
+uv pip install -e ".[dev,markets]"
 
-# Gather data and show report
-morning-report gather
-morning-report show
+# Full pipeline: gather → generate → export → email
+morning-report auto
+
+# Step by step
+morning-report gather                    # Fetch weather, markets, meditation
+morning-report show                      # Generate + display French document
+morning-report export                    # Convert to .docx via pandoc
+morning-report email                     # Email the .docx
 
 # Run specific gatherer
-morning-report gather --only email
-morning-report gather --only calendar
+morning-report gather --only weather
+morning-report gather --only meditation
 ```
-
-## Claude Code Skill
-
-The `/morning-report` skill generates an enhanced briefing with MCP-powered intelligence:
-
-```
-/morning-report          # Full briefing (CLI + Slack + Linear + Jira + Fireflies)
-/morning-report --quick  # CLI data only, skip MCP
-```
-
-The skill:
-1. Runs `morning-report gather` (Python CLI) for local apps + REST APIs
-2. Queries MCP services: Slack (DMs, mentions), Linear (assigned issues), Jira (BolgiaTen tickets), Fireflies (meeting transcripts)
-3. Synthesizes all data with priority scoring
-4. Writes an enhanced briefing to `briefings/YYYY-MM-DD.md`
-5. Presents a concise summary with top action items
-
-Skill source: `skills/morning-report.md` (installed to `~/.claude/skills/morning-report/skill.md`)
-
-### MCP Services
-- **Slack** (Allora workspace): DMs, mentions, channel activity. User ID: `U09RTDE4ZNF`
-- **Linear** (Allora): Research + Quant teams. Issues, cycles, projects
-- **Jira** (BolgiaTen): `bolgiaten.atlassian.net`. Projects: EOVT1, IF
-- **Fireflies**: Meeting transcripts and summaries for meeting prep
 
 ## Testing
 ```bash
