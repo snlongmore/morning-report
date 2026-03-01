@@ -6,7 +6,7 @@ An automated daily French learning document generator. Gathers weather, markets,
 ## Architecture
 - **Python CLI** (`morning-report`) using Typer
 - **Gatherers** (`src/morning_report/gatherers/`) — weather, markets, meditation (each implements `BaseGatherer` ABC)
-- **French generator** (`src/morning_report/french_gen.py`) — single Anthropic API call for all French content
+- **French generator** (`src/morning_report/french_gen.py`) — single LLM call for all French content (dual-backend: Claude Code CLI or Anthropic API)
 - **Report generator** (`src/morning_report/report/`) — Jinja2 template rendering
 - **Config** (`config/config.yaml`) — YAML with env var expansion
 
@@ -15,12 +15,18 @@ An automated daily French learning document generator. Gathers weather, markets,
 - Config secrets use `${ENV_VAR}` syntax, resolved at load time
 - Reports written to `briefings/YYYY-MM-DD.md`
 - Source code lives in `src/morning_report/` (src layout)
-- French content generated via `claude-haiku-4-5` (configurable in `french.model`)
+- French content generation supports two backends (`french.backend` in config):
+  - `claude-code` (default) — uses `claude -p` CLI, covered by Claude Code subscription
+  - `api` — uses `anthropic` SDK directly, requires API key and per-token billing
+- Model defaults: `haiku` for claude-code backend, `claude-haiku-4-5` for api backend
 
 ## Running
 ```bash
-# Install in dev mode
+# Install in dev mode (claude-code backend needs no extras)
 uv pip install -e ".[dev,markets]"
+
+# If using backend: "api" in config, also install the api extra:
+uv pip install -e ".[dev,markets,api]"
 
 # Full pipeline: gather → generate → export → email
 morning-report auto

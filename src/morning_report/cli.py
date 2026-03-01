@@ -223,7 +223,7 @@ def email(
 
 
 def _generate_french(data: dict, cfg: dict, date: datetime | None = None) -> dict:
-    """Generate French content via the Anthropic API.
+    """Generate French content via Claude Code CLI or Anthropic API.
 
     Returns a dict of French content, or an empty dict on failure.
     """
@@ -237,6 +237,7 @@ def _generate_french(data: dict, cfg: dict, date: datetime | None = None) -> dic
             level=french_cfg.get("level", "B1"),
             model=french_cfg.get("model"),
             api_key=french_cfg.get("api_key"),
+            backend=french_cfg.get("backend", "claude-code"),
             date=date,
         )
     except Exception as e:

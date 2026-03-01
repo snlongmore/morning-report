@@ -1,6 +1,7 @@
-"""Tests for French content generation via Anthropic API."""
+"""Tests for French content generation via Claude Code CLI and Anthropic API."""
 
 import json
+import subprocess
 from datetime import datetime
 from unittest.mock import patch, MagicMock
 
@@ -193,7 +194,114 @@ class TestBuildPrompts:
 
 # -- Main generation function -------------------------------------------------
 
-class TestGenerateFrenchContent:
+class TestGenerateViaClaudeCode:
+    """Tests for the claude-code backend (subprocess calling ``claude -p``)."""
+
+    def _mock_proc(self, result_dict, returncode=0, stderr=""):
+        """Create a mock CompletedProcess with a CLI JSON envelope."""
+        envelope = {"result": json.dumps(result_dict), "is_error": False}
+        return MagicMock(
+            returncode=returncode,
+            stdout=json.dumps(envelope),
+            stderr=stderr,
+        )
+
+    def test_successful_generation(self):
+        proc = self._mock_proc(MOCK_API_RESPONSE)
+        with patch("morning_report.french_gen.subprocess.run", return_value=proc):
+            result = generate_french_content(
+                WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                backend="claude-code",
+                date=datetime(2026, 3, 1),
+            )
+
+        assert result["meditation_fr"] == MOCK_API_RESPONSE["meditation_fr"]
+        assert result["poem"] == MOCK_API_RESPONSE["poem"]
+        assert "_error" not in result
+
+    def test_missing_keys_get_fallback(self):
+        partial = {"meditation_fr": "Texte traduit."}
+        proc = self._mock_proc(partial)
+        with patch("morning_report.french_gen.subprocess.run", return_value=proc):
+            result = generate_french_content(
+                WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                backend="claude-code",
+            )
+
+        assert result["meditation_fr"] == "Texte traduit."
+        for key in ("poem", "history", "vocabulary", "expression", "grammar", "exercise"):
+            assert result[key] == _FALLBACK_MSG
+
+    def test_claude_not_installed(self):
+        with patch(
+            "morning_report.french_gen.subprocess.run",
+            side_effect=FileNotFoundError("claude"),
+        ):
+            result = generate_french_content(
+                WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                backend="claude-code",
+            )
+
+        assert "_error" in result
+        assert "not found" in result["_error"]
+        for key in _EXPECTED_KEYS:
+            assert result[key] == _FALLBACK_MSG
+
+    def test_timeout(self):
+        with patch(
+            "morning_report.french_gen.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=180),
+        ):
+            result = generate_french_content(
+                WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                backend="claude-code",
+            )
+
+        assert "_error" in result
+        assert "timed out" in result["_error"]
+        for key in _EXPECTED_KEYS:
+            assert result[key] == _FALLBACK_MSG
+
+    def test_nonzero_exit(self):
+        proc = MagicMock(returncode=1, stdout="", stderr="Something went wrong")
+        with patch("morning_report.french_gen.subprocess.run", return_value=proc):
+            result = generate_french_content(
+                WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                backend="claude-code",
+            )
+
+        assert "_error" in result
+        assert "code 1" in result["_error"]
+
+    def test_custom_model(self):
+        proc = self._mock_proc(MOCK_API_RESPONSE)
+        with patch("morning_report.french_gen.subprocess.run", return_value=proc) as mock_run:
+            generate_french_content(
+                WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                backend="claude-code",
+                model="sonnet",
+            )
+
+        args = mock_run.call_args[0][0]
+        model_idx = args.index("--model")
+        assert args[model_idx + 1] == "sonnet"
+
+    def test_default_model_is_haiku(self):
+        proc = self._mock_proc(MOCK_API_RESPONSE)
+        with patch("morning_report.french_gen.subprocess.run", return_value=proc) as mock_run:
+            generate_french_content(
+                WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                backend="claude-code",
+            )
+
+        args = mock_run.call_args[0][0]
+        model_idx = args.index("--model")
+        assert args[model_idx + 1] == "haiku"
+
+
+class TestGenerateViaApi:
+    """Tests for the api backend (anthropic SDK)."""
+
     def _make_mock_response(self, content_dict):
         mock_response = MagicMock()
         mock_block = MagicMock()
@@ -219,6 +327,7 @@ class TestGenerateFrenchContent:
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
                 api_key="test-key",
+                backend="api",
                 date=datetime(2026, 3, 1),
             )
 
@@ -236,6 +345,7 @@ class TestGenerateFrenchContent:
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
                 api_key="test-key",
+                backend="api",
             )
 
         assert result["meditation_fr"] == "Translated text."
@@ -251,6 +361,7 @@ class TestGenerateFrenchContent:
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
                 api_key="test-key",
+                backend="api",
             )
 
         assert "_error" in result
@@ -266,6 +377,7 @@ class TestGenerateFrenchContent:
             with patch.dict("sys.modules", {"anthropic": None}):
                 result = generate_french_content(
                     WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                    backend="api",
                 )
         finally:
             if saved is not None:
@@ -283,11 +395,27 @@ class TestGenerateFrenchContent:
             generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
                 api_key="test-key",
+                backend="api",
                 model="claude-sonnet-4-5-20250514",
             )
 
         call_kwargs = mock_client.messages.create.call_args.kwargs
         assert call_kwargs["model"] == "claude-sonnet-4-5-20250514"
+
+    def test_default_model_is_claude_haiku(self):
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = self._make_mock_response(MOCK_API_RESPONSE)
+        mock_mod = self._make_mock_anthropic(mock_client)
+
+        with patch.dict("sys.modules", {"anthropic": mock_mod}):
+            generate_french_content(
+                WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                api_key="test-key",
+                backend="api",
+            )
+
+        call_kwargs = mock_client.messages.create.call_args.kwargs
+        assert call_kwargs["model"] == "claude-haiku-4-5"
 
     def test_uses_configured_level(self):
         mock_client = MagicMock()
@@ -299,6 +427,7 @@ class TestGenerateFrenchContent:
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
                 level="A2",
                 api_key="test-key",
+                backend="api",
             )
 
         call_kwargs = mock_client.messages.create.call_args.kwargs
@@ -313,6 +442,7 @@ class TestGenerateFrenchContent:
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
                 api_key="bad-key",
+                backend="api",
             )
 
         assert "_error" in result
