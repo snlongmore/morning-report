@@ -18,7 +18,7 @@ An automated daily French learning document generator. Gathers weather, markets,
 - French content generation supports two backends (`french.backend` in config):
   - `claude-code` (default) — uses `claude -p` CLI, covered by Claude Code subscription
   - `api` — uses `anthropic` SDK directly, requires API key and per-token billing
-- Model defaults: `haiku` for claude-code backend, `claude-haiku-4-5` for api backend
+- Model defaults: `sonnet` for claude-code backend, `claude-haiku-4-5` for api backend
 
 ## Running
 ```bash

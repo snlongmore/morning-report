@@ -15,13 +15,14 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 from datetime import datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MODEL_CLI = "haiku"            # model alias for claude -p
+_DEFAULT_MODEL_CLI = "sonnet"           # model alias for claude -p
 _DEFAULT_MODEL_API = "claude-haiku-4-5" # full model ID for anthropic SDK
 _MAX_TOKENS = 4096
 _TIMEOUT = 120.0
@@ -176,6 +177,12 @@ def _generate_via_claude_code(
     Returns:
         Parsed content dict on success, or fallback dict with ``_error`` key.
     """
+    # Strip CLAUDECODE env var so `claude -p` doesn't refuse to run when
+    # invoked from within an interactive Claude Code session.  The -p flag
+    # is non-interactive print mode with --no-session-persistence, so there
+    # is no resource conflict with the parent session.
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+
     try:
         proc = subprocess.run(
             [
@@ -189,6 +196,7 @@ def _generate_via_claude_code(
             capture_output=True,
             text=True,
             timeout=_CLI_TIMEOUT,
+            env=env,
         )
     except FileNotFoundError:
         logger.error("claude CLI not found on PATH — is Claude Code installed?")
@@ -203,7 +211,11 @@ def _generate_via_claude_code(
 
     if proc.returncode != 0:
         stderr = proc.stderr.strip() if proc.stderr else "(no stderr)"
-        logger.error("claude CLI exited with code %d: %s", proc.returncode, stderr)
+        stdout = proc.stdout.strip() if proc.stdout else "(no stdout)"
+        logger.error(
+            "claude CLI exited with code %d: stderr=%s stdout=%s",
+            proc.returncode, stderr, stdout,
+        )
         return {key: _FALLBACK_MSG for key in _EXPECTED_KEYS} | {
             "_error": f"claude CLI exited with code {proc.returncode}: {stderr}"
         }

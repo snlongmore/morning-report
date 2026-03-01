@@ -286,7 +286,7 @@ class TestGenerateViaClaudeCode:
         model_idx = args.index("--model")
         assert args[model_idx + 1] == "sonnet"
 
-    def test_default_model_is_haiku(self):
+    def test_default_model_is_sonnet(self):
         proc = self._mock_proc(MOCK_API_RESPONSE)
         with patch("morning_report.french_gen.subprocess.run", return_value=proc) as mock_run:
             generate_french_content(
@@ -296,7 +296,7 @@ class TestGenerateViaClaudeCode:
 
         args = mock_run.call_args[0][0]
         model_idx = args.index("--model")
-        assert args[model_idx + 1] == "haiku"
+        assert args[model_idx + 1] == "sonnet"
 
 
 class TestGenerateViaApi:
