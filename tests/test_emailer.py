@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from morning_report.report.emailer import (
-    send_report, build_message, _build_summary,
+    send_report, build_message, _build_summary, _build_subject,
     get_keychain_password, set_keychain_password, KEYCHAIN_SERVICE,
 )
 
@@ -21,25 +21,6 @@ SAMPLE_DATA = {
             }
         },
     },
-    "calendar": {
-        "status": "ok",
-        "events": [],
-    },
-    "email": {
-        "status": "ok",
-        "accounts": {
-            "gmail": [{"sender": "a@b.com", "subject": "hi"}] * 12,
-            "work": [{"sender": "c@d.com", "subject": "hello"}] * 5,
-        },
-    },
-    "arxiv": {
-        "status": "ok",
-        "papers": [
-            {"title": "Paper A", "tier": 1},
-            {"title": "Paper B", "tier": 2},
-            {"title": "Paper C", "tier": 3},
-        ],
-    },
     "markets": {
         "status": "ok",
         "crypto": {
@@ -51,41 +32,38 @@ SAMPLE_DATA = {
 
 
 class TestBuildSummary:
-    def test_includes_weather(self):
+    def test_includes_meteo(self):
         summary = _build_summary(SAMPLE_DATA)
+        assert "Meteo" in summary
         assert "West Kirby" in summary
-        assert "light rain" in summary
 
-    def test_includes_email_count(self):
+    def test_includes_marches(self):
         summary = _build_summary(SAMPLE_DATA)
-        assert "17 unread" in summary
-        assert "2 accounts" in summary
-
-    def test_includes_arxiv(self):
-        summary = _build_summary(SAMPLE_DATA)
-        assert "3 new papers" in summary
-        assert "1 tier 1" in summary
-
-    def test_includes_markets(self):
-        summary = _build_summary(SAMPLE_DATA)
+        assert "Marches" in summary
         assert "BTC" in summary
         assert "ALLO" in summary
 
-    def test_includes_full_report_attached(self):
+    def test_includes_piece_jointe(self):
         summary = _build_summary(SAMPLE_DATA)
-        assert "Full report attached" in summary
+        assert "piece jointe" in summary
 
     def test_handles_empty_data(self):
         summary = _build_summary({})
-        assert "Morning Report" in summary
-        assert "Full report attached" in summary
+        assert "Francais du jour" in summary
+        assert "piece jointe" in summary
+
+
+class TestBuildSubject:
+    def test_french_subject(self):
+        subject = _build_subject()
+        assert "Francais du jour" in subject
 
 
 class TestBuildMessage:
     def test_message_structure(self, tmp_path):
-        docx_path = tmp_path / "2026-02-25.docx"
+        docx_path = tmp_path / "2026-03-01.docx"
         docx_path.write_bytes(b"fake docx content")
-        json_path = tmp_path / "2026-02-25.json"
+        json_path = tmp_path / "2026-03-01.json"
         json_path.write_text(json.dumps(SAMPLE_DATA))
 
         msg = build_message(
@@ -95,11 +73,11 @@ class TestBuildMessage:
             sender="sender@example.com",
         )
 
-        assert msg["Subject"].startswith("Morning Report")
+        assert "Francais du jour" in msg["Subject"]
         assert msg["From"] == "sender@example.com"
         assert msg["To"] == "test@example.com"
 
-    def test_has_attachment(self, tmp_path):
+    def test_has_single_attachment(self, tmp_path):
         docx_path = tmp_path / "report.docx"
         docx_path.write_bytes(b"fake docx")
         json_path = tmp_path / "report.json"
@@ -107,13 +85,12 @@ class TestBuildMessage:
 
         msg = build_message(docx_path, json_path, "to@test.com", "from@test.com")
 
-        # EmailMessage with attachment has multiple parts
         parts = list(msg.iter_parts())
-        assert len(parts) == 2  # text body + attachment
+        assert len(parts) == 2  # text body + 1 attachment
         attachment = parts[1]
         assert attachment.get_filename() == "report.docx"
 
-    def test_body_contains_summary(self, tmp_path):
+    def test_body_contains_french_summary(self, tmp_path):
         docx_path = tmp_path / "report.docx"
         docx_path.write_bytes(b"fake docx")
         json_path = tmp_path / "report.json"
@@ -122,7 +99,7 @@ class TestBuildMessage:
         msg = build_message(docx_path, json_path, "to@test.com", "from@test.com")
 
         body = msg.get_body(preferencelist=("plain",)).get_content()
-        assert "Full report attached" in body
+        assert "piece jointe" in body
 
 
 class TestSendReport:
@@ -223,7 +200,7 @@ class TestKeychainPassword:
 
     def test_get_keychain_password_not_found(self):
         mock_result = MagicMock()
-        mock_result.returncode = 44  # security exit code for "not found"
+        mock_result.returncode = 44
         mock_result.stdout = ""
 
         with patch("morning_report.report.emailer.subprocess.run", return_value=mock_result):
@@ -238,11 +215,9 @@ class TestKeychainPassword:
         with patch("morning_report.report.emailer.subprocess.run", side_effect=[mock_delete, mock_add]) as mock_run:
             set_keychain_password("test@example.com", "new-password")
 
-        # First call: delete existing
         assert mock_run.call_args_list[0][0][0] == [
             "security", "delete-generic-password", "-s", KEYCHAIN_SERVICE, "-a", "test@example.com",
         ]
-        # Second call: add new
         assert mock_run.call_args_list[1][0][0] == [
             "security", "add-generic-password", "-s", KEYCHAIN_SERVICE, "-a", "test@example.com", "-w", "new-password",
         ]
