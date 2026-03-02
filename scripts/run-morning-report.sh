@@ -21,7 +21,7 @@ else
     exit 1
 fi
 
-# Run the full pipeline
+# Run the full pipeline (caffeinate -i prevents idle sleep during execution)
 echo "$(date '+%Y-%m-%d %H:%M:%S') — Starting morning report"
-morning-report auto 2>&1
+caffeinate -i morning-report auto 2>&1
 echo "$(date '+%Y-%m-%d %H:%M:%S') — Morning report complete"
