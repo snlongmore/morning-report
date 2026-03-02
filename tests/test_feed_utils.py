@@ -2,7 +2,7 @@
 
 from unittest.mock import patch, MagicMock
 
-from morning_report.gatherers.feed_utils import strip_html, parse_feeds
+from morning_report.gatherers.feed_utils import strip_html, trim_article_content, parse_feeds
 
 
 class TestStripHtml:
@@ -23,6 +23,47 @@ class TestStripHtml:
 
     def test_self_closing_tags(self):
         assert strip_html("Hello<br/>World") == "HelloWorld"
+
+
+class TestTrimArticleContent:
+    def test_trims_at_image_credit(self):
+        text = "Meditation text here. Image Credit: John Doe"
+        assert trim_article_content(text) == "Meditation text here."
+
+    def test_trims_at_reference(self):
+        text = "Deep thoughts on surrender. Reference: Rohr, Falling Upward"
+        assert trim_article_content(text) == "Deep thoughts on surrender."
+
+    def test_trims_at_explore_further(self):
+        text = "Main content. Explore Further Practice With Us"
+        assert trim_article_content(text) == "Main content."
+
+    def test_trims_at_wordpress_boilerplate(self):
+        text = "Article body. The post Daily Meditation appeared first on CAC."
+        assert trim_article_content(text) == "Article body."
+
+    def test_trims_at_story_from_community(self):
+        text = "Real content. Story from Our Community: Some person shared..."
+        assert trim_article_content(text) == "Real content."
+
+    def test_trims_at_new_at_cac(self):
+        text = "Good stuff. New at CAC: Check out our latest..."
+        assert trim_article_content(text) == "Good stuff."
+
+    def test_trims_at_earliest_marker(self):
+        text = "Content. Image Credit: X. Explore Further. The post ..."
+        assert trim_article_content(text) == "Content."
+
+    def test_no_markers_returns_full_text(self):
+        text = "Clean meditation text with no cruft at all."
+        assert trim_article_content(text) == text
+
+    def test_empty_string(self):
+        assert trim_article_content("") == ""
+
+    def test_case_sensitive_image_credit(self):
+        text = "Content here. Image credit: someone"
+        assert trim_article_content(text) == "Content here."
 
 
 class TestParseFeeds:

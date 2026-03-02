@@ -16,6 +16,36 @@ def strip_html(text: str) -> str:
     return text
 
 
+# Markers that signal the end of actual article content (CAC meditation cruft)
+_CONTENT_END_MARKERS = (
+    "Reference:",
+    "Image Credit:",
+    "Image credit:",
+    "Explore Further",
+    "The post ",
+    "Story from Our Community",
+    "New at CAC",
+)
+
+
+def trim_article_content(text: str) -> str:
+    """Trim website cruft that follows the actual article content.
+
+    Looks for known markers (image credits, footer navigation, WordPress
+    boilerplate) and truncates at the earliest one found.
+    """
+    if not text:
+        return text
+
+    earliest = len(text)
+    for marker in _CONTENT_END_MARKERS:
+        idx = text.find(marker)
+        if idx != -1 and idx < earliest:
+            earliest = idx
+
+    return text[:earliest].strip()
+
+
 def parse_feeds(feeds: dict[str, list[str]], max_per_category: int = 5) -> dict[str, list[dict]]:
     """Fetch and parse RSS feeds, grouped by category.
 
@@ -48,12 +78,12 @@ def parse_feeds(feeds: dict[str, list[str]], max_per_category: int = 5) -> dict[
                     }
                     summary = entry.get("summary", "")
                     if summary:
-                        item["summary"] = strip_html(summary)
+                        item["summary"] = trim_article_content(strip_html(summary))
                     content_list = entry.get("content", [])
                     if content_list and isinstance(content_list, list):
                         raw_content = content_list[0].get("value", "")
                         if raw_content:
-                            item["content"] = strip_html(raw_content)
+                            item["content"] = trim_article_content(strip_html(raw_content))
                     items.append(item)
             except Exception as e:
                 logger.warning("Failed to parse feed %s: %s", url, e)
