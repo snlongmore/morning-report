@@ -1,6 +1,13 @@
 # Francais du jour — {{ date_fr }}
 
 *Genere a {{ generated_at }}*
+{% if french_content and french_content._backend == "api" %}
+*Via API ({{ french_content._model }}) — ${{ "%.4f"|format(french_content._cost_usd|default(0)) }}*
+{% elif french_content and french_content._backend == "claude-code" %}
+*Via Claude Code ({{ french_content._model }}) — subscription*
+{% elif french_content and french_content._error is defined %}
+*Generation failed — {{ french_content._error }}*
+{% endif %}
 
 ---
 

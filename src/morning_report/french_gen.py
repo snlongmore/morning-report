@@ -23,13 +23,19 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _DEFAULT_MODEL_CLI = "sonnet"           # model alias for claude -p
-_DEFAULT_MODEL_API = "claude-haiku-4-5" # full model ID for anthropic SDK
+_DEFAULT_MODEL_API = "claude-sonnet-4-6" # full model ID for anthropic SDK
 _MAX_TOKENS = 4096
 _TIMEOUT = 120.0
-_CLI_TIMEOUT = 180  # seconds for subprocess
+_CLI_TIMEOUT = 300  # seconds for subprocess
 _TEMPERATURE = 0.7
 
 _FALLBACK_MSG = "Section indisponible — erreur lors de la generation."
+
+# Pricing per million tokens: (input_$/M, output_$/M)
+_MODEL_PRICING: dict[str, tuple[float, float]] = {
+    "claude-sonnet-4-6": (3.0, 15.0),
+    "claude-haiku-4-5": (0.80, 4.0),
+}
 
 # Keys expected in the API response JSON
 _EXPECTED_KEYS = (
@@ -281,7 +287,21 @@ def _generate_via_api(
         if block.type == "text":
             raw_text += block.text
 
-    return _extract_json(raw_text)
+    result = _extract_json(raw_text)
+
+    # Stamp token usage and cost metadata
+    usage = getattr(response, "usage", None)
+    if usage:
+        input_tokens = getattr(usage, "input_tokens", 0) or 0
+        output_tokens = getattr(usage, "output_tokens", 0) or 0
+        result["_input_tokens"] = input_tokens
+        result["_output_tokens"] = output_tokens
+        input_rate, output_rate = _MODEL_PRICING.get(model, (0.0, 0.0))
+        result["_cost_usd"] = (
+            input_tokens * input_rate + output_tokens * output_rate
+        ) / 1_000_000
+
+    return result
 
 
 def generate_french_content(
@@ -332,9 +352,29 @@ def generate_french_content(
     else:
         result = _generate_via_claude_code(system_prompt, user_prompt, model)
 
+        # If claude-code failed, try the API backend as fallback
+        if result.get("_error"):
+            logger.warning(
+                "Primary backend failed (%s), trying API fallback",
+                result["_error"],
+            )
+            fallback_model = _DEFAULT_MODEL_API
+            fallback = _generate_via_api(
+                system_prompt, user_prompt, fallback_model, api_key,
+            )
+            if not fallback.get("_error"):
+                fallback["_backend"] = "api"
+                fallback["_model"] = fallback_model
+                return fallback
+            logger.error(
+                "API fallback also failed: %s", fallback.get("_error")
+            )
+
     # Fill in any missing keys with fallback
     for key in _EXPECTED_KEYS:
         if key not in result:
             result[key] = _FALLBACK_MSG
 
+    result["_backend"] = backend
+    result["_model"] = model
     return result

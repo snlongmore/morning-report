@@ -17,6 +17,7 @@ from morning_report.french_gen import (
     _meditation_text,
     _EXPECTED_KEYS,
     _FALLBACK_MSG,
+    _MODEL_PRICING,
 )
 
 
@@ -218,6 +219,8 @@ class TestGenerateViaClaudeCode:
         assert result["meditation_fr"] == MOCK_API_RESPONSE["meditation_fr"]
         assert result["poem"] == MOCK_API_RESPONSE["poem"]
         assert "_error" not in result
+        assert result["_backend"] == "claude-code"
+        assert result["_model"] == "sonnet"
 
     def test_missing_keys_get_fallback(self):
         partial = {"meditation_fr": "Texte traduit."}
@@ -299,15 +302,99 @@ class TestGenerateViaClaudeCode:
         assert args[model_idx + 1] == "sonnet"
 
 
-class TestGenerateViaApi:
-    """Tests for the api backend (anthropic SDK)."""
+class TestFallbackChain:
+    """Tests for the claude-code → api fallback chain."""
 
-    def _make_mock_response(self, content_dict):
+    def _make_mock_response(self, content_dict, input_tokens=500, output_tokens=1500):
         mock_response = MagicMock()
         mock_block = MagicMock()
         mock_block.type = "text"
         mock_block.text = json.dumps(content_dict)
         mock_response.content = [mock_block]
+        mock_response.usage.input_tokens = input_tokens
+        mock_response.usage.output_tokens = output_tokens
+        return mock_response
+
+    def _make_mock_anthropic(self, mock_client=None):
+        mock_mod = MagicMock()
+        if mock_client:
+            mock_mod.Anthropic.return_value = mock_client
+        mock_mod.AuthenticationError = type("AuthenticationError", (Exception,), {})
+        return mock_mod
+
+    def test_timeout_triggers_api_fallback(self):
+        """When claude-code times out, the API backend is tried and succeeds."""
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = self._make_mock_response(MOCK_API_RESPONSE)
+        mock_mod = self._make_mock_anthropic(mock_client)
+
+        with patch(
+            "morning_report.french_gen.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=300),
+        ):
+            with patch.dict("sys.modules", {"anthropic": mock_mod}):
+                result = generate_french_content(
+                    WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                    backend="claude-code",
+                    api_key="test-key",
+                    date=datetime(2026, 3, 1),
+                )
+
+        assert result["meditation_fr"] == MOCK_API_RESPONSE["meditation_fr"]
+        assert "_error" not in result
+        assert result["_backend"] == "api"
+        assert result["_model"] == "claude-sonnet-4-6"
+
+    def test_both_backends_fail(self):
+        """When both claude-code and API fail, error result is returned."""
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = Exception("API also failed")
+        mock_mod = self._make_mock_anthropic(mock_client)
+
+        with patch(
+            "morning_report.french_gen.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=300),
+        ):
+            with patch.dict("sys.modules", {"anthropic": mock_mod}):
+                result = generate_french_content(
+                    WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                    backend="claude-code",
+                    date=datetime(2026, 3, 1),
+                )
+
+        assert "_error" in result
+        for key in _EXPECTED_KEYS:
+            assert result[key] == _FALLBACK_MSG
+
+    def test_no_fallback_when_api_backend_selected(self):
+        """When backend='api' is explicitly selected, no fallback occurs."""
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = Exception("API failed")
+        mock_mod = self._make_mock_anthropic(mock_client)
+
+        with patch.dict("sys.modules", {"anthropic": mock_mod}):
+            with patch("morning_report.french_gen.subprocess.run") as mock_run:
+                result = generate_french_content(
+                    WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                    api_key="test-key",
+                    backend="api",
+                )
+
+        mock_run.assert_not_called()
+        assert "_error" in result
+
+
+class TestGenerateViaApi:
+    """Tests for the api backend (anthropic SDK)."""
+
+    def _make_mock_response(self, content_dict, input_tokens=500, output_tokens=1500):
+        mock_response = MagicMock()
+        mock_block = MagicMock()
+        mock_block.type = "text"
+        mock_block.text = json.dumps(content_dict)
+        mock_response.content = [mock_block]
+        mock_response.usage.input_tokens = input_tokens
+        mock_response.usage.output_tokens = output_tokens
         return mock_response
 
     def _make_mock_anthropic(self, mock_client=None):
@@ -334,6 +421,12 @@ class TestGenerateViaApi:
         assert result["meditation_fr"] == MOCK_API_RESPONSE["meditation_fr"]
         assert result["poem"] == MOCK_API_RESPONSE["poem"]
         assert "_error" not in result
+        assert result["_backend"] == "api"
+        assert result["_model"] == "claude-sonnet-4-6"
+        assert isinstance(result["_cost_usd"], float)
+        assert result["_cost_usd"] > 0
+        assert result["_input_tokens"] == 500
+        assert result["_output_tokens"] == 1500
 
     def test_missing_keys_get_fallback(self):
         partial_response = {"meditation_fr": "Translated text."}
@@ -402,7 +495,7 @@ class TestGenerateViaApi:
         call_kwargs = mock_client.messages.create.call_args.kwargs
         assert call_kwargs["model"] == "claude-sonnet-4-5-20250514"
 
-    def test_default_model_is_claude_haiku(self):
+    def test_default_model_is_claude_sonnet(self):
         mock_client = MagicMock()
         mock_client.messages.create.return_value = self._make_mock_response(MOCK_API_RESPONSE)
         mock_mod = self._make_mock_anthropic(mock_client)
@@ -415,7 +508,7 @@ class TestGenerateViaApi:
             )
 
         call_kwargs = mock_client.messages.create.call_args.kwargs
-        assert call_kwargs["model"] == "claude-haiku-4-5"
+        assert call_kwargs["model"] == "claude-sonnet-4-6"
 
     def test_uses_configured_level(self):
         mock_client = MagicMock()
