@@ -119,9 +119,14 @@ Meditation indisponible.
 ## Poeme du jour
 
 {% if french_content.poem is mapping %}
+{% if french_content.poem.title is defined %}
+### {{ french_content.poem.title }}
+
+{% endif %}
 {{ french_content.poem.text }}
 
-— *{{ french_content.poem.author }}*
+— *{{ french_content.poem.author }}*{% if french_content.poem.source is defined %}, {{ french_content.poem.source }}{% endif %}
+
 {% else %}
 {{ french_content.poem }}
 {% endif %}

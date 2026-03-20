@@ -29,3 +29,15 @@ Rather than duplicating translation logic in the template or doing string replac
 
 ## 2026-02-27: Remove placeholder sections from templates — use skill-only content instead
 Empty "Section completee par le skill" placeholders in the Jinja2 template confused CLI-only users and looked broken. Skill-generated content (poem, history, vocabulary lesson) should only appear in the skill-written report, not as empty stubs in the template. The template should render a complete, clean report with whatever data is available.
+
+## 2026-03-02: Stamp metadata on every return path when a function has early returns
+When adding metadata (like `_backend`, `_model`) to a function's return value, audit every `return` statement — including early returns from fallback branches. The fallback path in `generate_french_content()` had an early `return fallback` that would have missed the metadata stamp without explicit handling. Rule: if a function has N return paths, metadata must be stamped on all N.
+
+## 2026-03-02: Use `getattr` chains for SDK response objects — don't assume attribute presence
+Anthropic SDK response objects have `response.usage.input_tokens`, but defensive `getattr(response, "usage", None)` is safer than direct access. SDK versions change, and error responses may omit usage entirely. Same principle applies to any third-party SDK object.
+
+## 2026-03-02: Jinja2 default undefined silently returns falsy for missing dict keys
+With Jinja2's default `Undefined` (not `StrictUndefined`), `dict._missing_key == "some_value"` evaluates to `False` without raising. This means you can write `{% if french_content._backend == "api" %}` without needing an explicit `is defined` guard, as long as the fallthrough behaviour is correct. But use `|default(0)` for numeric formatting to avoid `"%.4f"|format(Undefined)` errors.
+
+## 2026-03-02: The project venv is at `.venv/` — use `.venv/bin/morning-report` not bare `morning-report`
+The `morning-report` CLI is installed in the project's `.venv/`, not in the system Python. The system `python` (miniforge) doesn't have the package. Always use `.venv/bin/morning-report` or activate the venv first.

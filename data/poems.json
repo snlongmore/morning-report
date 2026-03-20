@@ -1,0 +1,268 @@
+[
+  {
+    "title": "Demain, d\u00e8s l'aube",
+    "author": "Victor Hugo",
+    "source": "Les Contemplations (1856)",
+    "excerpt": "Demain, d\u00e8s l'aube, \u00e0 l'heure o\u00f9 blanchit la campagne,\nJe partirai. Vois-tu, je sais que tu m'attends.\nJ'irai par la for\u00eat, j'irai par la montagne.\nJe ne puis demeurer loin de toi plus longtemps.",
+    "themes": ["amour", "nature", "voyage"]
+  },
+  {
+    "title": "L'Invitation au voyage",
+    "author": "Charles Baudelaire",
+    "source": "Les Fleurs du mal (1857)",
+    "excerpt": "Mon enfant, ma s\u0153ur,\nSonge \u00e0 la douceur\nD'aller l\u00e0-bas vivre ensemble !\nAimer \u00e0 loisir,\nAimer et mourir\nAu pays qui te ressemble !",
+    "themes": ["voyage", "amour", "r\u00eave"]
+  },
+  {
+    "title": "Il pleure dans mon c\u0153ur",
+    "author": "Paul Verlaine",
+    "source": "Romances sans paroles (1874)",
+    "excerpt": "Il pleure dans mon c\u0153ur\nComme il pleut sur la ville ;\nQuelle est cette langueur\nQui p\u00e9n\u00e8tre mon c\u0153ur ?",
+    "themes": ["m\u00e9lancolie", "pluie", "nature"]
+  },
+  {
+    "title": "Le Dormeur du val",
+    "author": "Arthur Rimbaud",
+    "source": "Posth. (1870)",
+    "excerpt": "C'est un trou de verdure o\u00f9 chante une rivi\u00e8re\nAccrochant follement aux herbes des haillons\nD'argent ; o\u00f9 le soleil, de la montagne fi\u00e8re,\nLuit : c'est un petit val qui mousse de rayons.",
+    "themes": ["nature", "guerre", "mort"]
+  },
+  {
+    "title": "Le Lac",
+    "author": "Alphonse de Lamartine",
+    "source": "M\u00e9ditations po\u00e9tiques (1820)",
+    "excerpt": "\u00d4 temps ! suspends ton vol, et vous, heures propices !\nSuspendez votre cours :\nLaissez-nous savourer les rapides d\u00e9lices\nDes plus beaux de nos jours !",
+    "themes": ["temps", "amour", "nature"]
+  },
+  {
+    "title": "Le Pont Mirabeau",
+    "author": "Guillaume Apollinaire",
+    "source": "Alcools (1913)",
+    "excerpt": "Sous le pont Mirabeau coule la Seine\nEt nos amours\nFaut-il qu'il m'en souvienne\nLa joie venait toujours apr\u00e8s la peine",
+    "themes": ["amour", "temps", "m\u00e9lancolie"]
+  },
+  {
+    "title": "Le Corbeau et le Renard",
+    "author": "Jean de La Fontaine",
+    "source": "Fables (1668)",
+    "excerpt": "Ma\u00eetre Corbeau, sur un arbre perch\u00e9,\nTenait en son bec un fromage.\nMa\u00eetre Renard, par l'odeur all\u00e9ch\u00e9,\nLui tint \u00e0 peu pr\u00e8s ce langage :",
+    "themes": ["morale", "animaux", "ruse"]
+  },
+  {
+    "title": "Chanson d'automne",
+    "author": "Paul Verlaine",
+    "source": "Po\u00e8mes saturniens (1866)",
+    "excerpt": "Les sanglots longs\nDes violons\nDe l'automne\nBlessent mon c\u0153ur\nD'une langueur\nMonotone.",
+    "themes": ["automne", "m\u00e9lancolie", "saison"]
+  },
+  {
+    "title": "Correspondances",
+    "author": "Charles Baudelaire",
+    "source": "Les Fleurs du mal (1857)",
+    "excerpt": "La Nature est un temple o\u00f9 de vivants piliers\nLaissent parfois sortir de confuses paroles ;\nL'homme y passe \u00e0 travers des for\u00eats de symboles\nQui l'observent avec des regards familiers.",
+    "themes": ["nature", "philosophie", "sens"]
+  },
+  {
+    "title": "Ma Boh\u00e8me",
+    "author": "Arthur Rimbaud",
+    "source": "Posth. (1870)",
+    "excerpt": "Je m'en allais, les poings dans mes poches crev\u00e9es ;\nMon paletot aussi devenait id\u00e9al ;\nJ'allais sous le ciel, Muse ! et j'\u00e9tais ton f\u00e9al ;\nOh ! l\u00e0 ! l\u00e0 ! que d'amours splendides j'ai r\u00eav\u00e9es !",
+    "themes": ["libert\u00e9", "voyage", "jeunesse"]
+  },
+  {
+    "title": "Oceano Nox",
+    "author": "Victor Hugo",
+    "source": "Les Rayons et les Ombres (1840)",
+    "excerpt": "Oh ! combien de marins, combien de capitaines\nQui sont partis joyeux pour des courses lointaines,\nDans ce morne horizon se sont \u00e9vanouis !\nCombien ont disparu, dure et triste fortune !",
+    "themes": ["mer", "mort", "destin"]
+  },
+  {
+    "title": "Le Cimeti\u00e8re marin",
+    "author": "Paul Val\u00e9ry",
+    "source": "Charmes (1922)",
+    "excerpt": "Ce toit tranquille, o\u00f9 marchent des colombes,\nEntre les pins palpite, entre les tombes ;\nMidi le juste y compose de feux\nLa mer, la mer, toujours recommenc\u00e9e !",
+    "themes": ["mer", "vie", "mort", "philosophie"]
+  },
+  {
+    "title": "Le Bateau ivre",
+    "author": "Arthur Rimbaud",
+    "source": "Posth. (1871)",
+    "excerpt": "Comme je descendais des Fleuves impassibles,\nJe ne me sentis plus guid\u00e9 par les haleurs :\nDes Peaux-Rouges criards les avaient pris pour cibles\nLes ayant clou\u00e9s nus aux poteaux de couleurs.",
+    "themes": ["voyage", "libert\u00e9", "mer"]
+  },
+  {
+    "title": "Heureux qui, comme Ulysse",
+    "author": "Joachim du Bellay",
+    "source": "Les Regrets (1558)",
+    "excerpt": "Heureux qui, comme Ulysse, a fait un beau voyage,\nOu comme cestuy-l\u00e0 qui conquit la toison,\nEt puis est retourn\u00e9, plein d'usage et raison,\nVivre entre ses parents le reste de son \u00e2ge !",
+    "themes": ["voyage", "nostalgie", "patrie"]
+  },
+  {
+    "title": "Le Loup et l'Agneau",
+    "author": "Jean de La Fontaine",
+    "source": "Fables (1668)",
+    "excerpt": "La raison du plus fort est toujours la meilleure :\nNous l'allons montrer tout \u00e0 l'heure.\nUn Agneau se d\u00e9salt\u00e9rait\nDans le courant d'une onde pure.",
+    "themes": ["morale", "justice", "animaux"]
+  },
+  {
+    "title": "L'Albatros",
+    "author": "Charles Baudelaire",
+    "source": "Les Fleurs du mal (1857)",
+    "excerpt": "Souvent, pour s'amuser, les hommes d'\u00e9quipage\nPrennent des albatros, vastes oiseaux des mers,\nQui suivent, indolents compagnons de voyage,\nLe navire glissant sur les gouffres amers.",
+    "themes": ["po\u00e9sie", "solitude", "mer"]
+  },
+  {
+    "title": "Libert\u00e9",
+    "author": "Paul \u00c9luard",
+    "source": "Po\u00e9sie et v\u00e9rit\u00e9 (1942)",
+    "excerpt": "Sur mes cahiers d'\u00e9colier\nSur mon pupitre et les arbres\nSur le sable sur la neige\nJ'\u00e9cris ton nom",
+    "themes": ["libert\u00e9", "espoir", "r\u00e9sistance"]
+  },
+  {
+    "title": "D\u00e9jeuner du matin",
+    "author": "Jacques Pr\u00e9vert",
+    "source": "Paroles (1946)",
+    "excerpt": "Il a mis le caf\u00e9\nDans la tasse\nIl a mis le lait\nDans la tasse de caf\u00e9\nIl a mis le sucre\nDans le caf\u00e9 au lait",
+    "themes": ["quotidien", "rupture", "solitude"]
+  },
+  {
+    "title": "Barbara",
+    "author": "Jacques Pr\u00e9vert",
+    "source": "Paroles (1946)",
+    "excerpt": "Rappelle-toi Barbara\nIl pleuvait sans cesse sur Brest ce jour-l\u00e0\nEt tu marchais souriante\n\u00c9panouie ravie ruisselante\nSous la pluie",
+    "themes": ["guerre", "amour", "pluie"]
+  },
+  {
+    "title": "Nuit rh\u00e9nane",
+    "author": "Guillaume Apollinaire",
+    "source": "Alcools (1913)",
+    "excerpt": "Mon verre est plein d'un vin trembleur comme une flamme\n\u00c9coutez la chanson lente d'un batelier\nQui raconte avoir vu sous la lune sept femmes\nTordre leurs cheveux verts et longs jusqu'\u00e0 leurs pieds",
+    "themes": ["l\u00e9gende", "nuit", "myst\u00e8re"]
+  },
+  {
+    "title": "Mignonne, allons voir si la rose",
+    "author": "Pierre de Ronsard",
+    "source": "Odes (1550)",
+    "excerpt": "Mignonne, allons voir si la rose\nQui ce matin avait d\u00e9close\nSa robe de pourpre au Soleil,\nA point perdu cette v\u00eapr\u00e9e\nLes plis de sa robe pourpr\u00e9e,\nEt son teint au v\u00f4tre pareil.",
+    "themes": ["temps", "beaut\u00e9", "nature"]
+  },
+  {
+    "title": "La Cigale et la Fourmi",
+    "author": "Jean de La Fontaine",
+    "source": "Fables (1668)",
+    "excerpt": "La Cigale, ayant chant\u00e9\nTout l'\u00e9t\u00e9,\nSe trouva fort d\u00e9pourvue\nQuand la bise fut venue :\nPas un seul petit morceau\nDe mouche ou de vermisseau.",
+    "themes": ["morale", "travail", "saison"]
+  },
+  {
+    "title": "Sensation",
+    "author": "Arthur Rimbaud",
+    "source": "Posth. (1870)",
+    "excerpt": "Par les soirs bleus d'\u00e9t\u00e9, j'irai dans les sentiers,\nPicot\u00e9 par les bl\u00e9s, fouler l'herbe menue :\nR\u00eaveur, j'en sentirai la fra\u00eecheur \u00e0 mes pieds.\nJe laisserai le vent baigner ma t\u00eate nue.",
+    "themes": ["nature", "libert\u00e9", "\u00e9t\u00e9"]
+  },
+  {
+    "title": "Spleen (LXXVIII)",
+    "author": "Charles Baudelaire",
+    "source": "Les Fleurs du mal (1857)",
+    "excerpt": "Quand le ciel bas et lourd p\u00e8se comme un couvercle\nSur l'esprit g\u00e9missant en proie aux longs ennuis,\nEt que de l'horizon embrassant tout le cercle\nIl nous verse un jour noir plus triste que les nuits ;",
+    "themes": ["m\u00e9lancolie", "ennui", "ciel"]
+  },
+  {
+    "title": "Recueillement",
+    "author": "Charles Baudelaire",
+    "source": "Les Fleurs du mal (1868 ed.)",
+    "excerpt": "Sois sage, \u00f4 ma Douleur, et tiens-toi plus tranquille.\nTu r\u00e9clamais le Soir ; il descend ; le voici :\nUne atmosph\u00e8re obscure enveloppe la ville,\nAux uns portant la paix, aux autres le souci.",
+    "themes": ["m\u00e9lancolie", "soir", "paix"]
+  },
+  {
+    "title": "Mon r\u00eave familier",
+    "author": "Paul Verlaine",
+    "source": "Po\u00e8mes saturniens (1866)",
+    "excerpt": "Je fais souvent ce r\u00eave \u00e9trange et p\u00e9n\u00e9trant\nD'une femme inconnue, et que j'aime, et qui m'aime,\nEt qui n'est, chaque fois, ni tout \u00e0 fait la m\u00eame\nNi tout \u00e0 fait une autre, et m'aime et me comprend.",
+    "themes": ["r\u00eave", "amour", "myst\u00e8re"]
+  },
+  {
+    "title": "L'Isolement",
+    "author": "Alphonse de Lamartine",
+    "source": "M\u00e9ditations po\u00e9tiques (1820)",
+    "excerpt": "Souvent sur la montagne, \u00e0 l'ombre du vieux ch\u00eane,\nAu coucher du soleil, tristement je m'assieds ;\nJe promene au hasard mes regards sur la plaine,\nDont le tableau changeant se d\u00e9roule \u00e0 mes pieds.",
+    "themes": ["solitude", "nature", "m\u00e9lancolie"]
+  },
+  {
+    "title": "Zone",
+    "author": "Guillaume Apollinaire",
+    "source": "Alcools (1913)",
+    "excerpt": "\u00c0 la fin tu es las de ce monde ancien\nBergere \u00f4 tour Eiffel le troupeau des ponts b\u00eale ce matin\nTu en as assez de vivre dans l'antiquit\u00e9 grecque et romaine",
+    "themes": ["modernit\u00e9", "ville", "nostalgie"]
+  },
+  {
+    "title": "Les Feuilles mortes",
+    "author": "Jacques Pr\u00e9vert",
+    "source": "Paroles (1946)",
+    "excerpt": "Oh ! je voudrais tant que tu te souviennes\nDes jours heureux o\u00f9 nous \u00e9tions amis.\nEn ce temps-l\u00e0, la vie \u00e9tait plus belle\nEt le soleil plus br\u00fblant qu'aujourd'hui.",
+    "themes": ["automne", "nostalgie", "amour"]
+  },
+  {
+    "title": "Voyelles",
+    "author": "Arthur Rimbaud",
+    "source": "Posth. (1871)",
+    "excerpt": "A noir, E blanc, I rouge, U vert, O bleu : voyelles,\nJe dirai quelque jour vos naissances latentes :\nA, noir corset velu des mouches \u00e9clatantes\nQui bombinent autour des puanteurs cruelles,",
+    "themes": ["langage", "couleur", "synth\u00e8se"]
+  },
+  {
+    "title": "El Desdichado",
+    "author": "G\u00e9rard de Nerval",
+    "source": "Les Chim\u00e8res (1854)",
+    "excerpt": "Je suis le T\u00e9n\u00e9breux, \u2013 le Veuf, \u2013 l'Inconsol\u00e9,\nLe Prince d'Aquitaine \u00e0 la Tour abolie :\nMa seule \u00c9toile est morte, \u2013 et mon luth constell\u00e9\nPorte le Soleil noir de la M\u00e9lancolie.",
+    "themes": ["m\u00e9lancolie", "identit\u00e9", "myst\u00e8re"]
+  },
+  {
+    "title": "Pour faire le portrait d'un oiseau",
+    "author": "Jacques Pr\u00e9vert",
+    "source": "Paroles (1946)",
+    "excerpt": "Peindre d'abord une cage\navec une porte ouverte\npeindre ensuite\nquelque chose de joli\nquelque chose de simple\nquelque chose de beau\nquelque chose d'utile\npour l'oiseau",
+    "themes": ["art", "libert\u00e9", "nature"]
+  },
+  {
+    "title": "Harmonie du soir",
+    "author": "Charles Baudelaire",
+    "source": "Les Fleurs du mal (1857)",
+    "excerpt": "Voici venir les temps o\u00f9 vibrant sur sa tige\nChaque fleur s'\u00e9vapore ainsi qu'un encensoir ;\nLes sons et les parfums tournent dans l'air du soir ;\nValse m\u00e9lancolique et langoureux vertige !",
+    "themes": ["soir", "nature", "m\u00e9lancolie"]
+  },
+  {
+    "title": "Le Ch\u00eane et le Roseau",
+    "author": "Jean de La Fontaine",
+    "source": "Fables (1668)",
+    "excerpt": "Le Ch\u00eane un jour dit au Roseau :\n\u00ab Vous avez bien sujet d'accuser la Nature ;\nUn Roitelet pour vous est un pesant fardeau.\nLe moindre vent, qui d'aventure\nFait rider la face de l'eau,\nVous oblige \u00e0 baisser la t\u00eate. \u00bb",
+    "themes": ["morale", "force", "nature"]
+  },
+  {
+    "title": "L'Horloge",
+    "author": "Charles Baudelaire",
+    "source": "Les Fleurs du mal (1857)",
+    "excerpt": "Horloge ! dieu sinistre, effrayant, impassible,\nDont le doigt nous menace et nous dit : \u00ab Souviens-toi !\nLes vibrantes Douleurs dans ton c\u0153ur plein d'effroi\nSe planteront bient\u00f4t comme dans une cible. \u00bb",
+    "themes": ["temps", "mort", "angoisse"]
+  },
+  {
+    "title": "Soleils couchants",
+    "author": "Victor Hugo",
+    "source": "Les Feuilles d'automne (1831)",
+    "excerpt": "Le soleil s'est couch\u00e9 ce soir dans les nu\u00e9es ;\nDemain viendra l'orage, et le soir, et la nuit ;\nPuis l'aube, et ses clart\u00e9s de vapeurs obstruees ;\nPuis les nuits, puis les jours, pas du temps qui s'enfuit !",
+    "themes": ["temps", "nature", "m\u00e9lancolie"]
+  },
+  {
+    "title": "Clair de lune",
+    "author": "Paul Verlaine",
+    "source": "F\u00eates galantes (1869)",
+    "excerpt": "Votre \u00e2me est un paysage choisi\nQue vont charmant masques et bergamasques\nJouant du luth et dansant et quasi\nTristes sous leurs d\u00e9guisements fantasques.",
+    "themes": ["r\u00eave", "musique", "m\u00e9lancolie"]
+  },
+  {
+    "title": "Saltimbanques",
+    "author": "Guillaume Apollinaire",
+    "source": "Alcools (1913)",
+    "excerpt": "Dans la plaine les baladins\nS'\u00e9loignent au long des jardins\nDevant l'huis des auberges grises\nPar les villages sans \u00e9glises",
+    "themes": ["voyage", "spectacle", "marge"]
+  }
+]

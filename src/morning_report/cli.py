@@ -228,6 +228,16 @@ def _generate_french(data: dict, cfg: dict, date: datetime | None = None) -> dic
     Returns a dict of French content, or an empty dict on failure.
     """
     french_cfg = cfg.get("french", {})
+
+    # Select today's curated poem
+    poem = None
+    try:
+        from morning_report.poems import load_poems, select_poem
+        poems = load_poems()
+        poem = select_poem(date or datetime.now(), poems)
+    except Exception as e:
+        logging.getLogger("morning_report").warning("Could not load poem: %s", e)
+
     try:
         from morning_report.french_gen import generate_french_content
         return generate_french_content(
@@ -239,6 +249,7 @@ def _generate_french(data: dict, cfg: dict, date: datetime | None = None) -> dic
             api_key=french_cfg.get("api_key"),
             backend=french_cfg.get("backend", "claude-code"),
             date=date,
+            poem=poem,
         )
     except Exception as e:
         logging.getLogger("morning_report").error("French generation failed: %s", e)

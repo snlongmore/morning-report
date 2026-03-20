@@ -22,7 +22,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MODEL_CLI = "sonnet"           # model alias for claude -p
+_DEFAULT_MODEL_CLI = "opus"             # model alias for claude -p
 _DEFAULT_MODEL_API = "claude-sonnet-4-6" # full model ID for anthropic SDK
 _MAX_TOKENS = 4096
 _TIMEOUT = 120.0
@@ -40,7 +40,6 @@ _MODEL_PRICING: dict[str, tuple[float, float]] = {
 # Keys expected in the API response JSON
 _EXPECTED_KEYS = (
     "meditation_fr",
-    "poem",
     "history",
     "vocabulary",
     "expression",
@@ -64,9 +63,21 @@ def _build_user_prompt(
     weather_summary: str,
     markets_summary: str,
     meditation_text: str,
+    poem: dict | None = None,
 ) -> str:
     """Build the user prompt with the day's data."""
     date_str = date.strftime("%A, %d %B %Y")
+
+    if poem:
+        poem_block = (
+            f'\nThe following real French poem excerpt will appear in today\'s document. '
+            f'Reference vocabulary and constructions from this poem in the vocabulary, '
+            f'grammar, and exercise sections where natural:\n\n'
+            f'"{poem["excerpt"]}" — {poem["author"]}, {poem["title"]}\n'
+        )
+    else:
+        poem_block = ""
+
     return f"""Date: {date_str}
 
 Weather: {weather_summary}
@@ -75,22 +86,20 @@ Markets: {markets_summary}
 
 Meditation (English, full text):
 {meditation_text}
-
+{poem_block}
 Generate a JSON object with these keys:
 
 1. "meditation_fr": Full French translation of the meditation text above. Translate the ENTIRE text — no truncation, no summary.
 
-2. "poem": A short French poem (4–8 lines) related to today's themes (weather, season, or meditation topic). Include the poet's name (real or "Anonyme"). Format: {{"text": "...", "author": "..."}}
+2. "history": A notable event that happened on this date in history, written in French (2–3 sentences). Format: {{"year": NNNN, "text": "..."}}
 
-3. "history": A notable event that happened on this date in history, written in French (2–3 sentences). Format: {{"year": NNNN, "text": "..."}}
+3. "vocabulary": A list of 5–8 French vocabulary words drawn from TODAY'S weather, markets, meditation, or poem content. Each entry: {{"fr": "...", "en": "...", "example": "..."}} where example is a French sentence using the word.
 
-4. "vocabulary": A list of 5–8 French vocabulary words drawn from TODAY'S weather, markets, or meditation content. Each entry: {{"fr": "...", "en": "...", "example": "..."}} where example is a French sentence using the word.
+4. "expression": A French idiomatic expression related to today's content. Format: {{"fr": "...", "en": "...", "example": "..."}}
 
-5. "expression": A French idiomatic expression related to today's content. Format: {{"fr": "...", "en": "...", "example": "..."}}
+5. "grammar": A grammar point illustrated by a construction that appears in the meditation translation or poem. Format: {{"rule": "...", "explanation": "...", "examples": ["...", "..."]}}
 
-6. "grammar": A grammar point illustrated by a construction that appears in the meditation translation or poem. Format: {{"rule": "...", "explanation": "...", "examples": ["...", "..."]}}
-
-7. "exercise": A mini-exercise (fill-in-the-blank or translation) using today's vocabulary. Format: {{"instruction": "...", "questions": ["...", "..."], "answers": ["...", "..."]}}"""
+6. "exercise": A mini-exercise (fill-in-the-blank or translation) using today's vocabulary. Format: {{"instruction": "...", "questions": ["...", "..."], "answers": ["...", "..."]}}"""
 
 
 def _extract_json(text: str) -> dict[str, Any]:
@@ -187,7 +196,7 @@ def _generate_via_claude_code(
     # invoked from within an interactive Claude Code session.  The -p flag
     # is non-interactive print mode with --no-session-persistence, so there
     # is no resource conflict with the parent session.
-    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    env = {k: v for k, v in os.environ.items() if k not in ("CLAUDECODE", "ANTHROPIC_API_KEY")}
 
     try:
         proc = subprocess.run(
@@ -313,6 +322,7 @@ def generate_french_content(
     api_key: str | None = None,
     backend: str = "claude-code",
     date: datetime | None = None,
+    poem: dict | None = None,
 ) -> dict[str, Any]:
     """Generate all French learning content via a single LLM call.
 
@@ -326,6 +336,8 @@ def generate_french_content(
         api_key: Anthropic API key (only used when ``backend="api"``).
         backend: ``"claude-code"`` (default) or ``"api"``.
         date: Date for the report. Defaults to today.
+        poem: Curated poem dict (from :func:`poems.select_poem`). If provided,
+            the poem is passed to the LLM as context and stamped onto the result.
 
     Returns:
         Dict with keys: meditation_fr, poem, history, vocabulary, expression,
@@ -345,7 +357,7 @@ def generate_french_content(
     med_text = _meditation_text(meditation_data)
 
     system_prompt = _build_system_prompt(level)
-    user_prompt = _build_user_prompt(date, w_summary, m_summary, med_text)
+    user_prompt = _build_user_prompt(date, w_summary, m_summary, med_text, poem=poem)
 
     if backend == "api":
         result = _generate_via_api(system_prompt, user_prompt, model, api_key)
@@ -365,6 +377,13 @@ def generate_french_content(
             if not fallback.get("_error"):
                 fallback["_backend"] = "api"
                 fallback["_model"] = fallback_model
+                if poem:
+                    fallback["poem"] = {
+                        "text": poem["excerpt"],
+                        "author": poem["author"],
+                        "title": poem["title"],
+                        "source": poem["source"],
+                    }
                 return fallback
             logger.error(
                 "API fallback also failed: %s", fallback.get("_error")
@@ -374,6 +393,15 @@ def generate_french_content(
     for key in _EXPECTED_KEYS:
         if key not in result:
             result[key] = _FALLBACK_MSG
+
+    # Stamp the curated poem onto the result (not LLM-generated)
+    if poem:
+        result["poem"] = {
+            "text": poem["excerpt"],
+            "author": poem["author"],
+            "title": poem["title"],
+            "source": poem["source"],
+        }
 
     result["_backend"] = backend
     result["_model"] = model

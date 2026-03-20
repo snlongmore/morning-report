@@ -202,7 +202,7 @@ def send_report(
 
     msg = build_message(docx_path, json_path, recipient, sender)
 
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=60) as server:
         server.starttls()
         server.login(sender, app_password)
         server.send_message(msg)

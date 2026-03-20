@@ -27,5 +27,8 @@
 
     <key>RunAtLoad</key>
     <false/>
+
+    <key>ExitTimeOut</key>
+    <integer>1800</integer>
 </dict>
 </plist>

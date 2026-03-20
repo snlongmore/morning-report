@@ -59,7 +59,9 @@ SAMPLE_FRENCH_CONTENT = {
     "meditation_fr": "Richard Rohr reflechit sur la pratique du lacher prise.",
     "poem": {
         "text": "La pluie tombe doucement\nSur les toits gris du matin",
-        "author": "Anonyme",
+        "author": "Paul Verlaine",
+        "title": "Il pleure dans mon coeur",
+        "source": "Romances sans paroles (1874)",
     },
     "history": {
         "year": 1872,
@@ -174,7 +176,9 @@ class TestReportGeneration:
                                  french_content=SAMPLE_FRENCH_CONTENT)
         assert "Poeme du jour" in report
         assert "pluie tombe doucement" in report
-        assert "Anonyme" in report
+        assert "Paul Verlaine" in report
+        assert "Il pleure dans mon coeur" in report
+        assert "Romances sans paroles (1874)" in report
 
     def test_history_section(self, tmp_path):
         report = generate_report(SAMPLE_DATA, output_dir=tmp_path,

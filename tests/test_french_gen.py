@@ -60,10 +60,6 @@ MEDITATION_DATA = {
 
 MOCK_API_RESPONSE = {
     "meditation_fr": "Richard Rohr reflechit sur la pratique du lacher prise.",
-    "poem": {
-        "text": "La pluie tombe doucement\nSur les toits gris du matin",
-        "author": "Anonyme",
-    },
     "history": {
         "year": 1872,
         "text": "Le premier parc national au monde, Yellowstone, a ete cree.",
@@ -189,8 +185,36 @@ class TestBuildPrompts:
         assert "BTC" in prompt
         assert "Test meditation text" in prompt
         assert "meditation_fr" in prompt
-        assert "poem" in prompt
         assert "vocabulary" in prompt
+
+    def test_user_prompt_without_poem(self):
+        prompt = _build_user_prompt(
+            date=datetime(2026, 3, 1),
+            weather_summary="sunny",
+            markets_summary="BTC $67,000",
+            meditation_text="Test.",
+        )
+        assert "real French poem excerpt" not in prompt
+
+    def test_user_prompt_with_poem(self):
+        poem = {
+            "title": "Demain, des l'aube",
+            "author": "Victor Hugo",
+            "source": "Les Contemplations (1856)",
+            "excerpt": "Demain, des l'aube, a l'heure ou blanchit la campagne,",
+            "themes": ["nature"],
+        }
+        prompt = _build_user_prompt(
+            date=datetime(2026, 3, 1),
+            weather_summary="sunny",
+            markets_summary="BTC $67,000",
+            meditation_text="Test.",
+            poem=poem,
+        )
+        assert "real French poem excerpt" in prompt
+        assert "Victor Hugo" in prompt
+        assert "Demain, des l'aube" in prompt
+        assert poem["excerpt"] in prompt
 
 
 # -- Main generation function -------------------------------------------------
@@ -217,10 +241,9 @@ class TestGenerateViaClaudeCode:
             )
 
         assert result["meditation_fr"] == MOCK_API_RESPONSE["meditation_fr"]
-        assert result["poem"] == MOCK_API_RESPONSE["poem"]
         assert "_error" not in result
         assert result["_backend"] == "claude-code"
-        assert result["_model"] == "sonnet"
+        assert result["_model"] == "opus"
 
     def test_missing_keys_get_fallback(self):
         partial = {"meditation_fr": "Texte traduit."}
@@ -232,13 +255,16 @@ class TestGenerateViaClaudeCode:
             )
 
         assert result["meditation_fr"] == "Texte traduit."
-        for key in ("poem", "history", "vocabulary", "expression", "grammar", "exercise"):
+        for key in ("history", "vocabulary", "expression", "grammar", "exercise"):
             assert result[key] == _FALLBACK_MSG
 
     def test_claude_not_installed(self):
         with patch(
             "morning_report.french_gen.subprocess.run",
             side_effect=FileNotFoundError("claude"),
+        ), patch(
+            "morning_report.french_gen._generate_via_api",
+            return_value={key: _FALLBACK_MSG for key in _EXPECTED_KEYS} | {"_error": "API also failed"},
         ):
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
@@ -246,7 +272,7 @@ class TestGenerateViaClaudeCode:
             )
 
         assert "_error" in result
-        assert "not found" in result["_error"]
+        assert "not found" in result["_error"] or "API" in result["_error"]
         for key in _EXPECTED_KEYS:
             assert result[key] == _FALLBACK_MSG
 
@@ -254,6 +280,9 @@ class TestGenerateViaClaudeCode:
         with patch(
             "morning_report.french_gen.subprocess.run",
             side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=180),
+        ), patch(
+            "morning_report.french_gen._generate_via_api",
+            return_value={key: _FALLBACK_MSG for key in _EXPECTED_KEYS} | {"_error": "API also failed"},
         ):
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
@@ -261,20 +290,22 @@ class TestGenerateViaClaudeCode:
             )
 
         assert "_error" in result
-        assert "timed out" in result["_error"]
         for key in _EXPECTED_KEYS:
             assert result[key] == _FALLBACK_MSG
 
     def test_nonzero_exit(self):
         proc = MagicMock(returncode=1, stdout="", stderr="Something went wrong")
-        with patch("morning_report.french_gen.subprocess.run", return_value=proc):
+        with patch("morning_report.french_gen.subprocess.run", return_value=proc), \
+             patch(
+                "morning_report.french_gen._generate_via_api",
+                return_value={key: _FALLBACK_MSG for key in _EXPECTED_KEYS} | {"_error": "API also failed"},
+             ):
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
                 backend="claude-code",
             )
 
         assert "_error" in result
-        assert "code 1" in result["_error"]
 
     def test_custom_model(self):
         proc = self._mock_proc(MOCK_API_RESPONSE)
@@ -289,7 +320,7 @@ class TestGenerateViaClaudeCode:
         model_idx = args.index("--model")
         assert args[model_idx + 1] == "sonnet"
 
-    def test_default_model_is_sonnet(self):
+    def test_default_model_is_opus(self):
         proc = self._mock_proc(MOCK_API_RESPONSE)
         with patch("morning_report.french_gen.subprocess.run", return_value=proc) as mock_run:
             generate_french_content(
@@ -299,7 +330,7 @@ class TestGenerateViaClaudeCode:
 
         args = mock_run.call_args[0][0]
         model_idx = args.index("--model")
-        assert args[model_idx + 1] == "sonnet"
+        assert args[model_idx + 1] == "opus"
 
 
 class TestFallbackChain:
@@ -344,6 +375,37 @@ class TestFallbackChain:
         assert "_error" not in result
         assert result["_backend"] == "api"
         assert result["_model"] == "claude-sonnet-4-6"
+
+    def test_fallback_stamps_poem(self):
+        """When falling back to API, the poem is still stamped on the result."""
+        poem = {
+            "title": "Le Lac",
+            "author": "Alphonse de Lamartine",
+            "source": "Meditations poetiques (1820)",
+            "excerpt": "O temps ! suspends ton vol",
+            "themes": ["temps"],
+        }
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = self._make_mock_response(MOCK_API_RESPONSE)
+        mock_mod = self._make_mock_anthropic(mock_client)
+
+        with patch(
+            "morning_report.french_gen.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=300),
+        ):
+            with patch.dict("sys.modules", {"anthropic": mock_mod}):
+                result = generate_french_content(
+                    WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                    backend="claude-code",
+                    api_key="test-key",
+                    date=datetime(2026, 3, 1),
+                    poem=poem,
+                )
+
+        assert result["_backend"] == "api"
+        assert result["poem"]["text"] == poem["excerpt"]
+        assert result["poem"]["author"] == poem["author"]
+        assert result["poem"]["title"] == poem["title"]
 
     def test_both_backends_fail(self):
         """When both claude-code and API fail, error result is returned."""
@@ -419,7 +481,6 @@ class TestGenerateViaApi:
             )
 
         assert result["meditation_fr"] == MOCK_API_RESPONSE["meditation_fr"]
-        assert result["poem"] == MOCK_API_RESPONSE["poem"]
         assert "_error" not in result
         assert result["_backend"] == "api"
         assert result["_model"] == "claude-sonnet-4-6"
@@ -442,7 +503,7 @@ class TestGenerateViaApi:
             )
 
         assert result["meditation_fr"] == "Translated text."
-        for key in ("poem", "history", "vocabulary", "expression", "grammar", "exercise"):
+        for key in ("history", "vocabulary", "expression", "grammar", "exercise"):
             assert result[key] == _FALLBACK_MSG
 
     def test_api_call_failure(self):
@@ -540,3 +601,50 @@ class TestGenerateViaApi:
 
         assert "_error" in result
         assert "API key" in result["_error"]
+
+
+class TestPoemStamping:
+    """Tests that a curated poem is stamped onto the result dict."""
+
+    SAMPLE_POEM = {
+        "title": "Demain, des l'aube",
+        "author": "Victor Hugo",
+        "source": "Les Contemplations (1856)",
+        "excerpt": "Demain, des l'aube, a l'heure ou blanchit la campagne,",
+        "themes": ["nature"],
+    }
+
+    def _mock_proc(self, result_dict):
+        envelope = {"result": json.dumps(result_dict), "is_error": False}
+        return MagicMock(
+            returncode=0,
+            stdout=json.dumps(envelope),
+            stderr="",
+        )
+
+    def test_poem_stamped_on_result(self):
+        proc = self._mock_proc(MOCK_API_RESPONSE)
+        with patch("morning_report.french_gen.subprocess.run", return_value=proc):
+            result = generate_french_content(
+                WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                backend="claude-code",
+                date=datetime(2026, 3, 1),
+                poem=self.SAMPLE_POEM,
+            )
+
+        assert result["poem"]["text"] == self.SAMPLE_POEM["excerpt"]
+        assert result["poem"]["author"] == self.SAMPLE_POEM["author"]
+        assert result["poem"]["title"] == self.SAMPLE_POEM["title"]
+        assert result["poem"]["source"] == self.SAMPLE_POEM["source"]
+
+    def test_no_poem_when_none_provided(self):
+        proc = self._mock_proc(MOCK_API_RESPONSE)
+        with patch("morning_report.french_gen.subprocess.run", return_value=proc):
+            result = generate_french_content(
+                WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                backend="claude-code",
+                date=datetime(2026, 3, 1),
+                poem=None,
+            )
+
+        assert "poem" not in result

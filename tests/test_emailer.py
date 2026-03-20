@@ -123,7 +123,7 @@ class TestSendReport:
                 app_password="test-password-123",
             )
 
-        mock_smtp.assert_called_once_with("smtp.gmail.com", 587)
+        mock_smtp.assert_called_once_with("smtp.gmail.com", 587, timeout=60)
         mock_smtp_instance.starttls.assert_called_once()
         mock_smtp_instance.login.assert_called_once_with("sender@example.com", "test-password-123")
         mock_smtp_instance.send_message.assert_called_once()
