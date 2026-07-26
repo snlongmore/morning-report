@@ -2,7 +2,16 @@
 
 from unittest.mock import patch, MagicMock
 
-from morning_report.gatherers.feed_utils import strip_html, trim_article_content, parse_feeds
+import requests
+
+from morning_report.gatherers.feed_utils import (
+    strip_html,
+    trim_article_content,
+    parse_feeds,
+    _fetch_feed_content,
+    _FEED_TIMEOUT,
+    _USER_AGENT,
+)
 
 
 class TestStripHtml:
@@ -66,6 +75,43 @@ class TestTrimArticleContent:
         assert trim_article_content(text) == "Content here."
 
 
+class TestFetchFeedContent:
+    def test_uses_requests_with_timeout_and_user_agent(self):
+        mock_resp = MagicMock()
+        mock_resp.text = "<rss>...</rss>"
+
+        with patch("morning_report.gatherers.feed_utils.requests.get", return_value=mock_resp) as mock_get:
+            result = _fetch_feed_content("http://example.com/feed")
+
+        mock_get.assert_called_once_with(
+            "http://example.com/feed",
+            timeout=_FEED_TIMEOUT,
+            headers={"User-Agent": _USER_AGENT},
+        )
+        mock_resp.raise_for_status.assert_called_once()
+        assert result == "<rss>...</rss>"
+
+    def test_http_timeout_raises(self):
+        with patch("morning_report.gatherers.feed_utils.requests.get",
+                    side_effect=requests.exceptions.Timeout("timed out")):
+            try:
+                _fetch_feed_content("http://slow.example.com/feed")
+                assert False, "Should have raised Timeout"
+            except requests.exceptions.Timeout:
+                pass
+
+    def test_http_403_raises(self):
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("403 Forbidden")
+
+        with patch("morning_report.gatherers.feed_utils.requests.get", return_value=mock_resp):
+            try:
+                _fetch_feed_content("http://blocked.example.com/feed")
+                assert False, "Should have raised HTTPError"
+            except requests.exceptions.HTTPError:
+                pass
+
+
 class TestParseFeeds:
     def _make_mock_feed(self, entries, feed_title="Test Feed"):
         mock_feed = MagicMock()
@@ -89,9 +135,10 @@ class TestParseFeeds:
         mock_feedparser = MagicMock()
         mock_feedparser.parse.return_value = mock_feed
 
-        with patch.dict("sys.modules", {"feedparser": mock_feedparser}):
-            with patch("morning_report.gatherers.feed_utils.feedparser", mock_feedparser, create=True):
-                result = parse_feeds({"News": ["http://example.com/rss"]})
+        with patch("morning_report.gatherers.feed_utils._fetch_feed_content", return_value="<rss/>"):
+            with patch.dict("sys.modules", {"feedparser": mock_feedparser}):
+                with patch("morning_report.gatherers.feed_utils.feedparser", mock_feedparser, create=True):
+                    result = parse_feeds({"News": ["http://example.com/rss"]})
 
         assert "News" in result
         assert len(result["News"]) == 1
@@ -110,9 +157,10 @@ class TestParseFeeds:
         mock_feedparser = MagicMock()
         mock_feedparser.parse.return_value = mock_feed
 
-        with patch.dict("sys.modules", {"feedparser": mock_feedparser}):
-            with patch("morning_report.gatherers.feed_utils.feedparser", mock_feedparser, create=True):
-                result = parse_feeds({"Test": ["http://example.com/rss"]})
+        with patch("morning_report.gatherers.feed_utils._fetch_feed_content", return_value="<rss/>"):
+            with patch.dict("sys.modules", {"feedparser": mock_feedparser}):
+                with patch("morning_report.gatherers.feed_utils.feedparser", mock_feedparser, create=True):
+                    result = parse_feeds({"Test": ["http://example.com/rss"]})
 
         assert result["Test"][0]["content"] == "Full content here."
 
@@ -126,9 +174,10 @@ class TestParseFeeds:
         mock_feedparser = MagicMock()
         mock_feedparser.parse.return_value = mock_feed
 
-        with patch.dict("sys.modules", {"feedparser": mock_feedparser}):
-            with patch("morning_report.gatherers.feed_utils.feedparser", mock_feedparser, create=True):
-                result = parse_feeds({"Test": ["http://example.com/rss"]})
+        with patch("morning_report.gatherers.feed_utils._fetch_feed_content", return_value="<rss/>"):
+            with patch.dict("sys.modules", {"feedparser": mock_feedparser}):
+                with patch("morning_report.gatherers.feed_utils.feedparser", mock_feedparser, create=True):
+                    result = parse_feeds({"Test": ["http://example.com/rss"]})
 
         assert "summary" not in result["Test"][0]
         assert "content" not in result["Test"][0]
@@ -146,9 +195,10 @@ class TestParseFeeds:
         mock_feedparser = MagicMock()
         mock_feedparser.parse.return_value = mock_feed
 
-        with patch.dict("sys.modules", {"feedparser": mock_feedparser}):
-            with patch("morning_report.gatherers.feed_utils.feedparser", mock_feedparser, create=True):
-                result = parse_feeds({"Test": ["http://example.com/rss"]}, max_per_category=3)
+        with patch("morning_report.gatherers.feed_utils._fetch_feed_content", return_value="<rss/>"):
+            with patch.dict("sys.modules", {"feedparser": mock_feedparser}):
+                with patch("morning_report.gatherers.feed_utils.feedparser", mock_feedparser, create=True):
+                    result = parse_feeds({"Test": ["http://example.com/rss"]}, max_per_category=3)
 
         assert len(result["Test"]) == 3
 
@@ -162,12 +212,13 @@ class TestParseFeeds:
         mock_feedparser = MagicMock()
         mock_feedparser.parse.return_value = mock_feed
 
-        with patch.dict("sys.modules", {"feedparser": mock_feedparser}):
-            with patch("morning_report.gatherers.feed_utils.feedparser", mock_feedparser, create=True):
-                result = parse_feeds({
-                    "Cat A": ["http://a.com/rss"],
-                    "Cat B": ["http://b.com/rss"],
-                })
+        with patch("morning_report.gatherers.feed_utils._fetch_feed_content", return_value="<rss/>"):
+            with patch.dict("sys.modules", {"feedparser": mock_feedparser}):
+                with patch("morning_report.gatherers.feed_utils.feedparser", mock_feedparser, create=True):
+                    result = parse_feeds({
+                        "Cat A": ["http://a.com/rss"],
+                        "Cat B": ["http://b.com/rss"],
+                    })
 
         assert "Cat A" in result
         assert "Cat B" in result
@@ -181,10 +232,50 @@ class TestParseFeeds:
 
     def test_feed_parse_error_handled(self):
         mock_feedparser = MagicMock()
-        mock_feedparser.parse.side_effect = Exception("Network error")
+        mock_feedparser.parse.side_effect = Exception("Parse error")
 
-        with patch.dict("sys.modules", {"feedparser": mock_feedparser}):
-            with patch("morning_report.gatherers.feed_utils.feedparser", mock_feedparser, create=True):
-                result = parse_feeds({"Test": ["http://example.com/rss"]})
+        with patch("morning_report.gatherers.feed_utils._fetch_feed_content", return_value="<rss/>"):
+            with patch.dict("sys.modules", {"feedparser": mock_feedparser}):
+                with patch("morning_report.gatherers.feed_utils.feedparser", mock_feedparser, create=True):
+                    result = parse_feeds({"Test": ["http://example.com/rss"]})
 
         assert result["Test"] == []
+
+    def test_http_timeout_handled_gracefully(self):
+        """HTTP timeout from _fetch_feed_content is caught, returns empty list."""
+        mock_feedparser = MagicMock()
+
+        with patch("morning_report.gatherers.feed_utils._fetch_feed_content",
+                    side_effect=requests.exceptions.Timeout("timed out")):
+            with patch.dict("sys.modules", {"feedparser": mock_feedparser}):
+                with patch("morning_report.gatherers.feed_utils.feedparser", mock_feedparser, create=True):
+                    result = parse_feeds({"Test": ["http://slow.example.com/rss"]})
+
+        assert result["Test"] == []
+
+    def test_http_403_handled_gracefully(self):
+        """HTTP 403 from _fetch_feed_content is caught, returns empty list."""
+        mock_feedparser = MagicMock()
+
+        with patch("morning_report.gatherers.feed_utils._fetch_feed_content",
+                    side_effect=requests.exceptions.HTTPError("403 Forbidden")):
+            with patch.dict("sys.modules", {"feedparser": mock_feedparser}):
+                with patch("morning_report.gatherers.feed_utils.feedparser", mock_feedparser, create=True):
+                    result = parse_feeds({"Test": ["http://blocked.example.com/rss"]})
+
+        assert result["Test"] == []
+
+    def test_raw_content_passed_to_feedparser(self):
+        """Verify feedparser.parse receives raw XML string, not the URL."""
+        mock_feed = self._make_mock_feed([])
+        mock_feedparser = MagicMock()
+        mock_feedparser.parse.return_value = mock_feed
+
+        with patch("morning_report.gatherers.feed_utils._fetch_feed_content",
+                    return_value="<rss><channel></channel></rss>") as mock_fetch:
+            with patch.dict("sys.modules", {"feedparser": mock_feedparser}):
+                with patch("morning_report.gatherers.feed_utils.feedparser", mock_feedparser, create=True):
+                    parse_feeds({"Test": ["http://example.com/rss"]})
+
+        mock_fetch.assert_called_once_with("http://example.com/rss")
+        mock_feedparser.parse.assert_called_once_with("<rss><channel></channel></rss>")

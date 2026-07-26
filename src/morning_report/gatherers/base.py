@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import logging
+import signal
 from abc import ABC, abstractmethod
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+_GATHERER_TIMEOUT = 60  # seconds — safety net per gatherer
+
+
+class GathererTimeoutError(Exception):
+    """Raised when a gatherer exceeds its time limit."""
 
 
 class BaseGatherer(ABC):
@@ -41,19 +48,36 @@ class BaseGatherer(ABC):
         return True
 
     def safe_gather(self) -> dict[str, Any]:
-        """Run gather() with error handling. Always returns a valid dict."""
+        """Run gather() with error handling and timeout. Always returns a valid dict."""
         if not self.is_available():
             return {
                 "status": "skipped",
                 "reason": f"{self.name} gatherer is not available",
             }
+
+        old_handler = signal.getsignal(signal.SIGALRM)
+
+        def _timeout_handler(signum, frame):
+            raise GathererTimeoutError(
+                f"Gatherer '{self.name}' timed out after {_GATHERER_TIMEOUT}s"
+            )
+
         try:
+            signal.signal(signal.SIGALRM, _timeout_handler)
+            signal.alarm(_GATHERER_TIMEOUT)
             result = self.gather()
+            signal.alarm(0)
             result.setdefault("status", "ok")
             return result
+        except GathererTimeoutError as e:
+            logger.error(str(e))
+            return {"status": "error", "error": str(e)}
         except Exception as e:
             logger.exception("Gatherer '%s' failed", self.name)
             return {
                 "status": "error",
                 "error": str(e),
             }
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)

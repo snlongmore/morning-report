@@ -6,7 +6,15 @@ import logging
 import re
 from typing import Any
 
+import requests
+
 logger = logging.getLogger(__name__)
+
+_FEED_TIMEOUT = 15  # seconds — matches markets gatherer
+_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
 
 
 def strip_html(text: str) -> str:
@@ -46,6 +54,16 @@ def trim_article_content(text: str) -> str:
     return text[:earliest].strip()
 
 
+def _fetch_feed_content(url: str, timeout: int = _FEED_TIMEOUT) -> str:
+    """Fetch raw feed XML via requests with timeout and User-Agent.
+
+    Raises on HTTP errors (4xx/5xx) or connection timeouts.
+    """
+    resp = requests.get(url, timeout=timeout, headers={"User-Agent": _USER_AGENT})
+    resp.raise_for_status()
+    return resp.text
+
+
 def parse_feeds(feeds: dict[str, list[str]], max_per_category: int = 5) -> dict[str, list[dict]]:
     """Fetch and parse RSS feeds, grouped by category.
 
@@ -68,7 +86,8 @@ def parse_feeds(feeds: dict[str, list[str]], max_per_category: int = 5) -> dict[
         items: list[dict] = []
         for url in urls:
             try:
-                feed = feedparser.parse(url)
+                raw_xml = _fetch_feed_content(url)
+                feed = feedparser.parse(raw_xml)
                 for entry in feed.entries[:max_per_category]:
                     item: dict[str, Any] = {
                         "title": entry.get("title", ""),
