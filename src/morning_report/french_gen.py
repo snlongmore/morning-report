@@ -1,14 +1,11 @@
-"""French content generation via Claude Code CLI or Anthropic API.
+"""French content generation via Claude Code CLI.
 
 Makes a single LLM call to generate all French learning content for the
 daily report: meditation translation, poem, historical note, vocabulary,
 expression, grammar point, and exercise.
 
-Two backends are supported:
-- ``claude-code`` (default): uses ``claude -p`` (non-interactive print mode),
-  covered by a Claude Code subscription with no extra API charges.
-- ``api``: uses the ``anthropic`` SDK directly, requires a separate API key
-  and per-token billing.
+Uses ``claude -p`` (non-interactive print mode), covered by a Claude Code
+subscription with no extra API charges.
 """
 
 from __future__ import annotations
@@ -17,25 +14,26 @@ import json
 import logging
 import os
 import subprocess
+import time
 from datetime import datetime
 from typing import Any
 
+from morning_report import keychain
+
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MODEL_CLI = "opus"             # model alias for claude -p
-_DEFAULT_MODEL_API = "claude-sonnet-4-6" # full model ID for anthropic SDK
-_MAX_TOKENS = 4096
-_TIMEOUT = 120.0
-_CLI_TIMEOUT = 300  # seconds for subprocess
-_TEMPERATURE = 0.7
+_DEFAULT_MODEL = "opus"  # model alias for claude -p
+# A successful generation takes around 40s, so 180s is generous. The bound that
+# actually matters is that the whole retry budget, _MAX_RETRIES * (_CLI_TIMEOUT
+# + _RETRY_DELAY), has to fit inside the 1200s pipeline watchdog in
+# scripts/run-morning-report.sh. At 5 * (180 + 30) = 1050s it does. It did not
+# with the previous 10 * (300 + 30) = 3300s, so a bad morning was killed
+# mid-retry by the watchdog instead of finishing and writing a report.
+_CLI_TIMEOUT = 180       # seconds for subprocess
+_MAX_RETRIES = 5         # retry attempts on failure
+_RETRY_DELAY = 30        # seconds between retries
 
 _FALLBACK_MSG = "Section indisponible — erreur lors de la generation."
-
-# Pricing per million tokens: (input_$/M, output_$/M)
-_MODEL_PRICING: dict[str, tuple[float, float]] = {
-    "claude-sonnet-4-6": (3.0, 15.0),
-    "claude-haiku-4-5": (0.80, 4.0),
-}
 
 # Keys expected in the API response JSON
 _EXPECTED_KEYS = (
@@ -132,7 +130,7 @@ def _extract_json(text: str) -> dict[str, Any]:
                 pass
 
     # Fallback: return raw text as meditation_fr
-    logger.warning("Could not parse JSON from API response, using raw text as meditation_fr")
+    logger.warning("Could not parse JSON from response, using raw text as meditation_fr")
     return {"meditation_fr": text, "_parse_error": True}
 
 
@@ -182,6 +180,77 @@ def _meditation_text(meditation_data: dict) -> str:
     return med.get("content") or med.get("summary") or "Meditation text empty."
 
 
+def _build_cli_env() -> dict[str, str]:
+    """Build the environment for the ``claude -p`` subprocess.
+
+    Strips ``CLAUDECODE`` so ``claude -p`` does not refuse to run when invoked
+    from inside an interactive Claude Code session. The ``-p`` flag is
+    non-interactive print mode with ``--no-session-persistence``, so there is no
+    resource conflict with the parent session. Strips ``ANTHROPIC_API_KEY`` so
+    the run bills against the Claude subscription rather than an API key.
+
+    Supplies ``CLAUDE_CODE_OAUTH_TOKEN`` from the Keychain when it is not
+    already in the environment. Without it, an unattended run depends on the
+    short-lived OAuth access token that ``claude`` maintains for interactive
+    use, and that token cannot be refreshed from a launchd job.
+    """
+    env = {k: v for k, v in os.environ.items() if k not in ("CLAUDECODE", "ANTHROPIC_API_KEY")}
+
+    if not env.get("CLAUDE_CODE_OAUTH_TOKEN"):
+        token = keychain.get_claude_token()
+        if token:
+            env["CLAUDE_CODE_OAUTH_TOKEN"] = token
+        else:
+            logger.warning(
+                "No long-lived Claude token in the Keychain (service: %s). Falling back "
+                "to the interactive OAuth session, which cannot be refreshed from an "
+                "unattended run. Store one with: morning-report set-claude-token",
+                keychain.CLAUDE_TOKEN_SERVICE,
+            )
+
+    return env
+
+
+def _cli_error_message(proc: subprocess.CompletedProcess) -> str:
+    """Pull the human-readable reason out of a failed ``claude -p`` run.
+
+    On failure the CLI still writes its JSON envelope to stdout and leaves
+    stderr empty, so the useful text ("Failed to authenticate: OAuth session
+    expired...") sits in the envelope's ``result`` field. Reporting stderr
+    alone produced log lines that said only "(no stderr)".
+    """
+    stdout = (proc.stdout or "").strip()
+    if stdout:
+        try:
+            envelope = json.loads(stdout)
+        except (json.JSONDecodeError, TypeError):
+            pass
+        else:
+            if isinstance(envelope, dict) and envelope.get("is_error"):
+                message = envelope.get("result")
+                if isinstance(message, str) and message.strip():
+                    status = envelope.get("api_error_status")
+                    if status:
+                        return f"{message.strip()} (HTTP {status})"
+                    return message.strip()
+
+    stderr = (proc.stderr or "").strip()
+    return stderr or "no error detail on stdout or stderr"
+
+
+def _is_auth_error(message: str) -> bool:
+    """Whether a CLI error is an authentication failure.
+
+    Retrying these is pointless: the credential will not repair itself between
+    attempts, and burning the whole retry budget on it only delays the report.
+    """
+    lowered = message.lower()
+    return any(
+        marker in lowered
+        for marker in ("authenticate", "oauth", "unauthorized", "http 401", "please run /login")
+    )
+
+
 def _generate_via_claude_code(
     system_prompt: str,
     user_prompt: str,
@@ -192,22 +261,19 @@ def _generate_via_claude_code(
     Returns:
         Parsed content dict on success, or fallback dict with ``_error`` key.
     """
-    # Strip CLAUDECODE env var so `claude -p` doesn't refuse to run when
-    # invoked from within an interactive Claude Code session.  The -p flag
-    # is non-interactive print mode with --no-session-persistence, so there
-    # is no resource conflict with the parent session.
-    env = {k: v for k, v in os.environ.items() if k not in ("CLAUDECODE", "ANTHROPIC_API_KEY")}
+    env = _build_cli_env()
 
     try:
         proc = subprocess.run(
             [
-                "claude", "-p", user_prompt,
+                "claude", "-p",
                 "--system-prompt", system_prompt,
                 "--model", model,
                 "--output-format", "json",
                 "--tools", "",
                 "--no-session-persistence",
             ],
+            input=user_prompt,
             capture_output=True,
             text=True,
             timeout=_CLI_TIMEOUT,
@@ -225,15 +291,14 @@ def _generate_via_claude_code(
         }
 
     if proc.returncode != 0:
-        stderr = proc.stderr.strip() if proc.stderr else "(no stderr)"
-        stdout = proc.stdout.strip() if proc.stdout else "(no stdout)"
-        logger.error(
-            "claude CLI exited with code %d: stderr=%s stdout=%s",
-            proc.returncode, stderr, stdout,
-        )
-        return {key: _FALLBACK_MSG for key in _EXPECTED_KEYS} | {
-            "_error": f"claude CLI exited with code {proc.returncode}: {stderr}"
+        message = _cli_error_message(proc)
+        logger.error("claude CLI exited with code %d: %s", proc.returncode, message)
+        result = {key: _FALLBACK_MSG for key in _EXPECTED_KEYS} | {
+            "_error": f"claude CLI exited with code {proc.returncode}: {message}"
         }
+        if _is_auth_error(message):
+            result["_fatal"] = True
+        return result
 
     # Parse the CLI JSON envelope → extract the "result" field
     try:
@@ -248,93 +313,27 @@ def _generate_via_claude_code(
     return _extract_json(raw_text)
 
 
-def _generate_via_api(
-    system_prompt: str,
-    user_prompt: str,
-    model: str,
-    api_key: str | None = None,
-) -> dict[str, Any]:
-    """Generate French content using the ``anthropic`` SDK directly.
-
-    Returns:
-        Parsed content dict on success, or fallback dict with ``_error`` key.
-    """
-    try:
-        import anthropic
-    except ImportError:
-        logger.error("anthropic package not installed. Run: uv pip install 'morning-report[api]'")
-        return {key: _FALLBACK_MSG for key in _EXPECTED_KEYS} | {
-            "_error": "anthropic package not installed"
-        }
-
-    try:
-        client = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
-    except anthropic.AuthenticationError:
-        logger.error("Anthropic API key not found or invalid")
-        return {key: _FALLBACK_MSG for key in _EXPECTED_KEYS} | {
-            "_error": "Anthropic API key not found or invalid"
-        }
-
-    try:
-        response = client.messages.create(
-            model=model,
-            max_tokens=_MAX_TOKENS,
-            temperature=_TEMPERATURE,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
-            timeout=_TIMEOUT,
-        )
-    except Exception as e:
-        logger.error("Anthropic API call failed: %s", e)
-        return {key: _FALLBACK_MSG for key in _EXPECTED_KEYS} | {
-            "_error": f"API call failed: {e}"
-        }
-
-    # Extract text from response
-    raw_text = ""
-    for block in response.content:
-        if block.type == "text":
-            raw_text += block.text
-
-    result = _extract_json(raw_text)
-
-    # Stamp token usage and cost metadata
-    usage = getattr(response, "usage", None)
-    if usage:
-        input_tokens = getattr(usage, "input_tokens", 0) or 0
-        output_tokens = getattr(usage, "output_tokens", 0) or 0
-        result["_input_tokens"] = input_tokens
-        result["_output_tokens"] = output_tokens
-        input_rate, output_rate = _MODEL_PRICING.get(model, (0.0, 0.0))
-        result["_cost_usd"] = (
-            input_tokens * input_rate + output_tokens * output_rate
-        ) / 1_000_000
-
-    return result
-
-
 def generate_french_content(
     weather_data: dict,
     markets_data: dict,
     meditation_data: dict,
     level: str = "B1",
     model: str | None = None,
-    api_key: str | None = None,
-    backend: str = "claude-code",
     date: datetime | None = None,
     poem: dict | None = None,
 ) -> dict[str, Any]:
     """Generate all French learning content via a single LLM call.
 
+    Uses ``claude -p`` with retry logic: on failure (timeout, non-zero exit,
+    or other error), waits and retries up to ``_MAX_RETRIES`` times.
+
     Args:
         weather_data: Gathered weather data dict.
         markets_data: Gathered markets data dict.
         meditation_data: Gathered meditation data dict.
-        level: CEFR level (A1–C2).
-        model: Model name/alias.  Defaults depend on backend:
-            ``"haiku"`` for claude-code, ``"claude-haiku-4-5"`` for api.
-        api_key: Anthropic API key (only used when ``backend="api"``).
-        backend: ``"claude-code"`` (default) or ``"api"``.
+        level: CEFR level (A1-C2).
+        model: Model alias for claude -p (e.g. ``"opus"``, ``"sonnet"``).
+            Defaults to ``"opus"``.
         date: Date for the report. Defaults to today.
         poem: Curated poem dict (from :func:`poems.select_poem`). If provided,
             the poem is passed to the LLM as context and stamped onto the result.
@@ -345,11 +344,7 @@ def generate_french_content(
         values contain fallback messages and an _error key is set.
     """
     date = date or datetime.now()
-
-    if backend == "api":
-        model = model or _DEFAULT_MODEL_API
-    else:
-        model = model or _DEFAULT_MODEL_CLI
+    model = model or _DEFAULT_MODEL
 
     # Build summaries from gathered data
     w_summary = _weather_summary(weather_data)
@@ -359,34 +354,32 @@ def generate_french_content(
     system_prompt = _build_system_prompt(level)
     user_prompt = _build_user_prompt(date, w_summary, m_summary, med_text, poem=poem)
 
-    if backend == "api":
-        result = _generate_via_api(system_prompt, user_prompt, model, api_key)
-    else:
+    # Try with retries
+    result = None
+    for attempt in range(1, _MAX_RETRIES + 1):
         result = _generate_via_claude_code(system_prompt, user_prompt, model)
 
-        # If claude-code failed, try the API backend as fallback
-        if result.get("_error"):
-            logger.warning(
-                "Primary backend failed (%s), trying API fallback",
+        if not result.get("_error"):
+            break  # Success
+
+        if result.pop("_fatal", False):
+            logger.error(
+                "Authentication failed, so retrying will not help: %s. Store a "
+                "long-lived token with: morning-report set-claude-token",
                 result["_error"],
             )
-            fallback_model = _DEFAULT_MODEL_API
-            fallback = _generate_via_api(
-                system_prompt, user_prompt, fallback_model, api_key,
+            break
+
+        if attempt < _MAX_RETRIES:
+            logger.warning(
+                "Attempt %d/%d failed (%s), retrying in %ds...",
+                attempt, _MAX_RETRIES, result["_error"], _RETRY_DELAY,
             )
-            if not fallback.get("_error"):
-                fallback["_backend"] = "api"
-                fallback["_model"] = fallback_model
-                if poem:
-                    fallback["poem"] = {
-                        "text": poem["excerpt"],
-                        "author": poem["author"],
-                        "title": poem["title"],
-                        "source": poem["source"],
-                    }
-                return fallback
+            time.sleep(_RETRY_DELAY)
+        else:
             logger.error(
-                "API fallback also failed: %s", fallback.get("_error")
+                "All %d attempts failed. Last error: %s",
+                _MAX_RETRIES, result["_error"],
             )
 
     # Fill in any missing keys with fallback
@@ -403,6 +396,6 @@ def generate_french_content(
             "source": poem["source"],
         }
 
-    result["_backend"] = backend
+    result["_backend"] = "claude-code"
     result["_model"] = model
     return result

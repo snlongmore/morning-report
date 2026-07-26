@@ -246,8 +246,6 @@ def _generate_french(data: dict, cfg: dict, date: datetime | None = None) -> dic
             meditation_data=data.get("meditation", {}),
             level=french_cfg.get("level", "B1"),
             model=french_cfg.get("model"),
-            api_key=french_cfg.get("api_key"),
-            backend=french_cfg.get("backend", "claude-code"),
             date=date,
             poem=poem,
         )
@@ -371,6 +369,33 @@ def set_password(
     from morning_report.report.emailer import set_keychain_password
     set_keychain_password(account, password.strip())
     typer.echo(f"Password stored in Keychain (service: morning-report-gmail, account: {account})")
+
+
+@app.command(name="set-claude-token")
+def set_claude_token():
+    """Store a long-lived Claude Code token in macOS Keychain.
+
+    The scheduled 05:00 run cannot refresh the short-lived OAuth access token
+    that interactive Claude Code uses, so it fails whenever that token has
+    expired overnight. A long-lived token from ``claude setup-token`` has no
+    refresh step and works unattended.
+    """
+    from morning_report import keychain
+
+    typer.echo("Generate a long-lived token by running: claude setup-token")
+    typer.echo("Then paste it here.")
+    token = typer.prompt("Token", hide_input=True)
+
+    token = token.strip()
+    if not token:
+        typer.echo("Token cannot be empty.", err=True)
+        raise typer.Exit(1)
+
+    keychain.set_claude_token(token)
+    typer.echo(
+        f"Token stored in Keychain (service: {keychain.CLAUDE_TOKEN_SERVICE}, "
+        f"account: {keychain.CLAUDE_TOKEN_ACCOUNT})"
+    )
 
 
 _PLIST_LABEL = "com.snl.morning-report"

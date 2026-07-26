@@ -5,17 +5,18 @@ from __future__ import annotations
 import json
 import logging
 import smtplib
-import subprocess
 from datetime import datetime
 from email.message import EmailMessage
 from pathlib import Path
+
+from morning_report import keychain
 
 logger = logging.getLogger(__name__)
 
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
 
-KEYCHAIN_SERVICE = "morning-report-gmail"
+KEYCHAIN_SERVICE = keychain.GMAIL_SERVICE
 
 
 def get_keychain_password(account: str) -> str | None:
@@ -27,14 +28,7 @@ def get_keychain_password(account: str) -> str | None:
     Returns:
         The password string, or None if not found.
     """
-    result = subprocess.run(
-        ["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", account, "-w"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        return None
-    return result.stdout.strip()
+    return keychain.get_secret(KEYCHAIN_SERVICE, account)
 
 
 def set_keychain_password(account: str, password: str) -> None:
@@ -49,18 +43,7 @@ def set_keychain_password(account: str, password: str) -> None:
     Raises:
         RuntimeError: If the Keychain operation fails.
     """
-    # Delete existing entry (ignore errors if not found)
-    subprocess.run(
-        ["security", "delete-generic-password", "-s", KEYCHAIN_SERVICE, "-a", account],
-        capture_output=True,
-    )
-    result = subprocess.run(
-        ["security", "add-generic-password", "-s", KEYCHAIN_SERVICE, "-a", account, "-w", password],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"Failed to store password in Keychain: {result.stderr.strip()}")
+    keychain.set_secret(KEYCHAIN_SERVICE, account, password)
 
 
 def _build_subject() -> str:

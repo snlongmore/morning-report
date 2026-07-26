@@ -188,7 +188,7 @@ class TestKeychainPassword:
         mock_result.returncode = 0
         mock_result.stdout = "my-secret-password\n"
 
-        with patch("morning_report.report.emailer.subprocess.run", return_value=mock_result) as mock_run:
+        with patch("morning_report.keychain.subprocess.run", return_value=mock_result) as mock_run:
             pw = get_keychain_password("test@example.com")
 
         assert pw == "my-secret-password"
@@ -203,7 +203,7 @@ class TestKeychainPassword:
         mock_result.returncode = 44
         mock_result.stdout = ""
 
-        with patch("morning_report.report.emailer.subprocess.run", return_value=mock_result):
+        with patch("morning_report.keychain.subprocess.run", return_value=mock_result):
             pw = get_keychain_password("test@example.com")
 
         assert pw is None
@@ -212,7 +212,7 @@ class TestKeychainPassword:
         mock_delete = MagicMock(returncode=0)
         mock_add = MagicMock(returncode=0, stderr="")
 
-        with patch("morning_report.report.emailer.subprocess.run", side_effect=[mock_delete, mock_add]) as mock_run:
+        with patch("morning_report.keychain.subprocess.run", side_effect=[mock_delete, mock_add]) as mock_run:
             set_keychain_password("test@example.com", "new-password")
 
         assert mock_run.call_args_list[0][0][0] == [
@@ -226,6 +226,6 @@ class TestKeychainPassword:
         mock_delete = MagicMock(returncode=0)
         mock_add = MagicMock(returncode=1, stderr="some error")
 
-        with patch("morning_report.report.emailer.subprocess.run", side_effect=[mock_delete, mock_add]):
-            with pytest.raises(RuntimeError, match="Failed to store password"):
+        with patch("morning_report.keychain.subprocess.run", side_effect=[mock_delete, mock_add]):
+            with pytest.raises(RuntimeError, match="Failed to store secret"):
                 set_keychain_password("test@example.com", "new-password")

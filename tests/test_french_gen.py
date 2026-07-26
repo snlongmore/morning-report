@@ -1,24 +1,40 @@
-"""Tests for French content generation via Claude Code CLI and Anthropic API."""
+"""Tests for French content generation via Claude Code CLI."""
 
 import json
 import subprocess
 from datetime import datetime
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, call
 
 import pytest
 
 from morning_report.french_gen import (
     generate_french_content,
+    _build_cli_env,
     _build_system_prompt,
     _build_user_prompt,
+    _cli_error_message,
     _extract_json,
+    _is_auth_error,
     _weather_summary,
     _markets_summary,
     _meditation_text,
     _EXPECTED_KEYS,
     _FALLBACK_MSG,
-    _MODEL_PRICING,
+    _MAX_RETRIES,
 )
+
+
+@pytest.fixture(autouse=True)
+def stub_claude_token():
+    """Keep the Keychain out of every test in this module.
+
+    Patching ``morning_report.french_gen.subprocess.run`` patches ``run`` on the
+    shared ``subprocess`` module, so without this the Keychain lookup inside
+    ``_build_cli_env`` would consume the ``side_effect`` entries that the CLI
+    calls are meant to receive.
+    """
+    with patch("morning_report.french_gen.keychain.get_claude_token", return_value="tok-test"):
+        yield
 
 
 # -- Sample data ---------------------------------------------------------------
@@ -236,7 +252,6 @@ class TestGenerateViaClaudeCode:
         with patch("morning_report.french_gen.subprocess.run", return_value=proc):
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                backend="claude-code",
                 date=datetime(2026, 3, 1),
             )
 
@@ -251,7 +266,6 @@ class TestGenerateViaClaudeCode:
         with patch("morning_report.french_gen.subprocess.run", return_value=proc):
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                backend="claude-code",
             )
 
         assert result["meditation_fr"] == "Texte traduit."
@@ -262,31 +276,23 @@ class TestGenerateViaClaudeCode:
         with patch(
             "morning_report.french_gen.subprocess.run",
             side_effect=FileNotFoundError("claude"),
-        ), patch(
-            "morning_report.french_gen._generate_via_api",
-            return_value={key: _FALLBACK_MSG for key in _EXPECTED_KEYS} | {"_error": "API also failed"},
-        ):
+        ), patch("morning_report.french_gen.time.sleep"):
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                backend="claude-code",
             )
 
         assert "_error" in result
-        assert "not found" in result["_error"] or "API" in result["_error"]
+        assert "not found" in result["_error"]
         for key in _EXPECTED_KEYS:
             assert result[key] == _FALLBACK_MSG
 
     def test_timeout(self):
         with patch(
             "morning_report.french_gen.subprocess.run",
-            side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=180),
-        ), patch(
-            "morning_report.french_gen._generate_via_api",
-            return_value={key: _FALLBACK_MSG for key in _EXPECTED_KEYS} | {"_error": "API also failed"},
-        ):
+            side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=300),
+        ), patch("morning_report.french_gen.time.sleep"):
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                backend="claude-code",
             )
 
         assert "_error" in result
@@ -296,13 +302,9 @@ class TestGenerateViaClaudeCode:
     def test_nonzero_exit(self):
         proc = MagicMock(returncode=1, stdout="", stderr="Something went wrong")
         with patch("morning_report.french_gen.subprocess.run", return_value=proc), \
-             patch(
-                "morning_report.french_gen._generate_via_api",
-                return_value={key: _FALLBACK_MSG for key in _EXPECTED_KEYS} | {"_error": "API also failed"},
-             ):
+             patch("morning_report.french_gen.time.sleep"):
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                backend="claude-code",
             )
 
         assert "_error" in result
@@ -312,7 +314,6 @@ class TestGenerateViaClaudeCode:
         with patch("morning_report.french_gen.subprocess.run", return_value=proc) as mock_run:
             generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                backend="claude-code",
                 model="sonnet",
             )
 
@@ -325,282 +326,129 @@ class TestGenerateViaClaudeCode:
         with patch("morning_report.french_gen.subprocess.run", return_value=proc) as mock_run:
             generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                backend="claude-code",
             )
 
         args = mock_run.call_args[0][0]
         model_idx = args.index("--model")
         assert args[model_idx + 1] == "opus"
 
+    def test_prompt_passed_via_stdin(self):
+        """Verify user prompt is passed via stdin, not as a CLI argument."""
+        proc = self._mock_proc(MOCK_API_RESPONSE)
+        with patch("morning_report.french_gen.subprocess.run", return_value=proc) as mock_run:
+            generate_french_content(
+                WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                date=datetime(2026, 3, 1),
+            )
 
-class TestFallbackChain:
-    """Tests for the claude-code → api fallback chain."""
+        call_kwargs = mock_run.call_args
+        # Prompt should be in the 'input' kwarg, not in the command args
+        assert call_kwargs.kwargs.get("input") is not None
+        args = call_kwargs[0][0]
+        # The command should be ["claude", "-p", "--system-prompt", ...] without
+        # the user prompt embedded in it
+        assert args[0] == "claude"
+        assert args[1] == "-p"
+        assert args[2] == "--system-prompt"  # no user prompt between -p and --system-prompt
 
-    def _make_mock_response(self, content_dict, input_tokens=500, output_tokens=1500):
-        mock_response = MagicMock()
-        mock_block = MagicMock()
-        mock_block.type = "text"
-        mock_block.text = json.dumps(content_dict)
-        mock_response.content = [mock_block]
-        mock_response.usage.input_tokens = input_tokens
-        mock_response.usage.output_tokens = output_tokens
-        return mock_response
 
-    def _make_mock_anthropic(self, mock_client=None):
-        mock_mod = MagicMock()
-        if mock_client:
-            mock_mod.Anthropic.return_value = mock_client
-        mock_mod.AuthenticationError = type("AuthenticationError", (Exception,), {})
-        return mock_mod
+class TestRetryLogic:
+    """Tests for retry behaviour on failure."""
 
-    def test_timeout_triggers_api_fallback(self):
-        """When claude-code times out, the API backend is tried and succeeds."""
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = self._make_mock_response(MOCK_API_RESPONSE)
-        mock_mod = self._make_mock_anthropic(mock_client)
+    def _mock_proc(self, result_dict):
+        envelope = {"result": json.dumps(result_dict), "is_error": False}
+        return MagicMock(
+            returncode=0,
+            stdout=json.dumps(envelope),
+            stderr="",
+        )
 
+    def test_retry_succeeds_on_second_attempt(self):
+        """First call times out, second succeeds."""
+        proc = self._mock_proc(MOCK_API_RESPONSE)
         with patch(
             "morning_report.french_gen.subprocess.run",
-            side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=300),
-        ):
-            with patch.dict("sys.modules", {"anthropic": mock_mod}):
-                result = generate_french_content(
-                    WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                    backend="claude-code",
-                    api_key="test-key",
-                    date=datetime(2026, 3, 1),
-                )
-
-        assert result["meditation_fr"] == MOCK_API_RESPONSE["meditation_fr"]
-        assert "_error" not in result
-        assert result["_backend"] == "api"
-        assert result["_model"] == "claude-sonnet-4-6"
-
-    def test_fallback_stamps_poem(self):
-        """When falling back to API, the poem is still stamped on the result."""
-        poem = {
-            "title": "Le Lac",
-            "author": "Alphonse de Lamartine",
-            "source": "Meditations poetiques (1820)",
-            "excerpt": "O temps ! suspends ton vol",
-            "themes": ["temps"],
-        }
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = self._make_mock_response(MOCK_API_RESPONSE)
-        mock_mod = self._make_mock_anthropic(mock_client)
-
-        with patch(
-            "morning_report.french_gen.subprocess.run",
-            side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=300),
-        ):
-            with patch.dict("sys.modules", {"anthropic": mock_mod}):
-                result = generate_french_content(
-                    WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                    backend="claude-code",
-                    api_key="test-key",
-                    date=datetime(2026, 3, 1),
-                    poem=poem,
-                )
-
-        assert result["_backend"] == "api"
-        assert result["poem"]["text"] == poem["excerpt"]
-        assert result["poem"]["author"] == poem["author"]
-        assert result["poem"]["title"] == poem["title"]
-
-    def test_both_backends_fail(self):
-        """When both claude-code and API fail, error result is returned."""
-        mock_client = MagicMock()
-        mock_client.messages.create.side_effect = Exception("API also failed")
-        mock_mod = self._make_mock_anthropic(mock_client)
-
-        with patch(
-            "morning_report.french_gen.subprocess.run",
-            side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=300),
-        ):
-            with patch.dict("sys.modules", {"anthropic": mock_mod}):
-                result = generate_french_content(
-                    WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                    backend="claude-code",
-                    date=datetime(2026, 3, 1),
-                )
-
-        assert "_error" in result
-        for key in _EXPECTED_KEYS:
-            assert result[key] == _FALLBACK_MSG
-
-    def test_no_fallback_when_api_backend_selected(self):
-        """When backend='api' is explicitly selected, no fallback occurs."""
-        mock_client = MagicMock()
-        mock_client.messages.create.side_effect = Exception("API failed")
-        mock_mod = self._make_mock_anthropic(mock_client)
-
-        with patch.dict("sys.modules", {"anthropic": mock_mod}):
-            with patch("morning_report.french_gen.subprocess.run") as mock_run:
-                result = generate_french_content(
-                    WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                    api_key="test-key",
-                    backend="api",
-                )
-
-        mock_run.assert_not_called()
-        assert "_error" in result
-
-
-class TestGenerateViaApi:
-    """Tests for the api backend (anthropic SDK)."""
-
-    def _make_mock_response(self, content_dict, input_tokens=500, output_tokens=1500):
-        mock_response = MagicMock()
-        mock_block = MagicMock()
-        mock_block.type = "text"
-        mock_block.text = json.dumps(content_dict)
-        mock_response.content = [mock_block]
-        mock_response.usage.input_tokens = input_tokens
-        mock_response.usage.output_tokens = output_tokens
-        return mock_response
-
-    def _make_mock_anthropic(self, mock_client=None):
-        """Create a mock anthropic module with a working Anthropic class."""
-        mock_mod = MagicMock()
-        if mock_client:
-            mock_mod.Anthropic.return_value = mock_client
-        mock_mod.AuthenticationError = type("AuthenticationError", (Exception,), {})
-        return mock_mod
-
-    def test_successful_generation(self):
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = self._make_mock_response(MOCK_API_RESPONSE)
-        mock_mod = self._make_mock_anthropic(mock_client)
-
-        with patch.dict("sys.modules", {"anthropic": mock_mod}):
+            side_effect=[
+                subprocess.TimeoutExpired(cmd="claude", timeout=300),
+                proc,
+            ],
+        ), patch("morning_report.french_gen.time.sleep") as mock_sleep:
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                api_key="test-key",
-                backend="api",
                 date=datetime(2026, 3, 1),
             )
 
         assert result["meditation_fr"] == MOCK_API_RESPONSE["meditation_fr"]
         assert "_error" not in result
-        assert result["_backend"] == "api"
-        assert result["_model"] == "claude-sonnet-4-6"
-        assert isinstance(result["_cost_usd"], float)
-        assert result["_cost_usd"] > 0
-        assert result["_input_tokens"] == 500
-        assert result["_output_tokens"] == 1500
+        mock_sleep.assert_called_once_with(30)
 
-    def test_missing_keys_get_fallback(self):
-        partial_response = {"meditation_fr": "Translated text."}
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = self._make_mock_response(partial_response)
-        mock_mod = self._make_mock_anthropic(mock_client)
-
-        with patch.dict("sys.modules", {"anthropic": mock_mod}):
+    def test_retry_succeeds_on_third_attempt(self):
+        """Two failures then success."""
+        proc = self._mock_proc(MOCK_API_RESPONSE)
+        with patch(
+            "morning_report.french_gen.subprocess.run",
+            side_effect=[
+                subprocess.TimeoutExpired(cmd="claude", timeout=300),
+                subprocess.TimeoutExpired(cmd="claude", timeout=300),
+                proc,
+            ],
+        ), patch("morning_report.french_gen.time.sleep") as mock_sleep:
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                api_key="test-key",
-                backend="api",
+                date=datetime(2026, 3, 1),
             )
 
-        assert result["meditation_fr"] == "Translated text."
-        for key in ("history", "vocabulary", "expression", "grammar", "exercise"):
-            assert result[key] == _FALLBACK_MSG
+        assert result["meditation_fr"] == MOCK_API_RESPONSE["meditation_fr"]
+        assert "_error" not in result
+        assert mock_sleep.call_count == 2
 
-    def test_api_call_failure(self):
-        mock_client = MagicMock()
-        mock_client.messages.create.side_effect = Exception("API timeout")
-        mock_mod = self._make_mock_anthropic(mock_client)
-
-        with patch.dict("sys.modules", {"anthropic": mock_mod}):
+    def test_all_retries_exhausted(self):
+        """Every attempt fails — error result returned."""
+        with patch(
+            "morning_report.french_gen.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=300),
+        ), patch("morning_report.french_gen.time.sleep") as mock_sleep:
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                api_key="test-key",
-                backend="api",
+                date=datetime(2026, 3, 1),
             )
 
         assert "_error" in result
-        assert "API timeout" in result["_error"]
         for key in _EXPECTED_KEYS:
             assert result[key] == _FALLBACK_MSG
+        # One sleep between each pair of attempts, so one fewer than the attempts.
+        assert mock_sleep.call_count == _MAX_RETRIES - 1
 
-    def test_anthropic_not_installed(self):
-        # Temporarily remove anthropic from sys.modules if present
-        import sys
-        saved = sys.modules.pop("anthropic", None)
-        try:
-            with patch.dict("sys.modules", {"anthropic": None}):
-                result = generate_french_content(
-                    WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                    backend="api",
-                )
-        finally:
-            if saved is not None:
-                sys.modules["anthropic"] = saved
-
-        assert "_error" in result
-        assert "not installed" in result["_error"]
-
-    def test_custom_model(self):
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = self._make_mock_response(MOCK_API_RESPONSE)
-        mock_mod = self._make_mock_anthropic(mock_client)
-
-        with patch.dict("sys.modules", {"anthropic": mock_mod}):
-            generate_french_content(
-                WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                api_key="test-key",
-                backend="api",
-                model="claude-sonnet-4-5-20250514",
-            )
-
-        call_kwargs = mock_client.messages.create.call_args.kwargs
-        assert call_kwargs["model"] == "claude-sonnet-4-5-20250514"
-
-    def test_default_model_is_claude_sonnet(self):
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = self._make_mock_response(MOCK_API_RESPONSE)
-        mock_mod = self._make_mock_anthropic(mock_client)
-
-        with patch.dict("sys.modules", {"anthropic": mock_mod}):
-            generate_french_content(
-                WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                api_key="test-key",
-                backend="api",
-            )
-
-        call_kwargs = mock_client.messages.create.call_args.kwargs
-        assert call_kwargs["model"] == "claude-sonnet-4-6"
-
-    def test_uses_configured_level(self):
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = self._make_mock_response(MOCK_API_RESPONSE)
-        mock_mod = self._make_mock_anthropic(mock_client)
-
-        with patch.dict("sys.modules", {"anthropic": mock_mod}):
-            generate_french_content(
-                WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                level="A2",
-                api_key="test-key",
-                backend="api",
-            )
-
-        call_kwargs = mock_client.messages.create.call_args.kwargs
-        assert "A2" in call_kwargs["system"]
-
-    def test_auth_error_handling(self):
-        mock_mod = MagicMock()
-        mock_mod.AuthenticationError = type("AuthenticationError", (Exception,), {})
-        mock_mod.Anthropic.side_effect = mock_mod.AuthenticationError("Invalid key")
-
-        with patch.dict("sys.modules", {"anthropic": mock_mod}):
+    def test_no_retry_on_success(self):
+        """Successful first attempt — no retries."""
+        proc = self._mock_proc(MOCK_API_RESPONSE)
+        with patch(
+            "morning_report.french_gen.subprocess.run",
+            return_value=proc,
+        ), patch("morning_report.french_gen.time.sleep") as mock_sleep:
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                api_key="bad-key",
-                backend="api",
+                date=datetime(2026, 3, 1),
             )
 
-        assert "_error" in result
-        assert "API key" in result["_error"]
+        assert "_error" not in result
+        mock_sleep.assert_not_called()
+
+    def test_nonzero_exit_triggers_retry(self):
+        """Non-zero exit code also triggers retry."""
+        bad_proc = MagicMock(returncode=1, stdout="", stderr="error")
+        good_proc = self._mock_proc(MOCK_API_RESPONSE)
+        with patch(
+            "morning_report.french_gen.subprocess.run",
+            side_effect=[bad_proc, good_proc],
+        ), patch("morning_report.french_gen.time.sleep"):
+            result = generate_french_content(
+                WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                date=datetime(2026, 3, 1),
+            )
+
+        assert result["meditation_fr"] == MOCK_API_RESPONSE["meditation_fr"]
+        assert "_error" not in result
 
 
 class TestPoemStamping:
@@ -627,7 +475,6 @@ class TestPoemStamping:
         with patch("morning_report.french_gen.subprocess.run", return_value=proc):
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                backend="claude-code",
                 date=datetime(2026, 3, 1),
                 poem=self.SAMPLE_POEM,
             )
@@ -642,9 +489,131 @@ class TestPoemStamping:
         with patch("morning_report.french_gen.subprocess.run", return_value=proc):
             result = generate_french_content(
                 WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
-                backend="claude-code",
                 date=datetime(2026, 3, 1),
                 poem=None,
             )
 
         assert "poem" not in result
+
+
+# -- Authentication handling ---------------------------------------------------
+
+# The exact envelope `claude -p` writes to stdout when its OAuth session has
+# expired: exit code 1, empty stderr, and the real reason buried in "result".
+AUTH_FAILURE_STDOUT = json.dumps({
+    "type": "result",
+    "subtype": "success",
+    "is_error": True,
+    "api_error_status": None,
+    "duration_ms": 18,
+    "result": "Failed to authenticate: OAuth session expired and could not be refreshed",
+})
+
+
+class TestCliErrorMessage:
+    """The reason for a failure has to survive into the log."""
+
+    def test_extracts_result_field_from_error_envelope(self):
+        proc = MagicMock(returncode=1, stdout=AUTH_FAILURE_STDOUT, stderr="")
+        assert _cli_error_message(proc) == (
+            "Failed to authenticate: OAuth session expired and could not be refreshed"
+        )
+
+    def test_appends_api_error_status_when_present(self):
+        proc = MagicMock(
+            returncode=1,
+            stdout=json.dumps({"is_error": True, "result": "Unauthorized", "api_error_status": 401}),
+            stderr="",
+        )
+        assert _cli_error_message(proc) == "Unauthorized (HTTP 401)"
+
+    def test_falls_back_to_stderr_when_stdout_is_not_json(self):
+        proc = MagicMock(returncode=1, stdout="not json at all", stderr="boom")
+        assert _cli_error_message(proc) == "boom"
+
+    def test_reports_absence_rather_than_an_empty_string(self):
+        proc = MagicMock(returncode=1, stdout="", stderr="")
+        assert _cli_error_message(proc) == "no error detail on stdout or stderr"
+
+
+class TestIsAuthError:
+    @pytest.mark.parametrize("message", [
+        "Failed to authenticate: OAuth session expired and could not be refreshed",
+        "Unauthorized (HTTP 401)",
+        "Invalid API key · Please run /login",
+    ])
+    def test_recognises_auth_failures(self, message):
+        assert _is_auth_error(message) is True
+
+    @pytest.mark.parametrize("message", [
+        "claude CLI timed out after 180s",
+        "Connection reset by peer",
+        "no error detail on stdout or stderr",
+    ])
+    def test_leaves_other_failures_retryable(self, message):
+        assert _is_auth_error(message) is False
+
+
+class TestAuthFailureStopsRetrying:
+    def test_auth_failure_attempts_once(self):
+        """Retrying an expired credential cannot help, so it must not burn the budget."""
+        proc = MagicMock(returncode=1, stdout=AUTH_FAILURE_STDOUT, stderr="")
+        with patch("morning_report.french_gen.subprocess.run", return_value=proc) as mock_run, \
+             patch("morning_report.french_gen.time.sleep") as mock_sleep:
+            result = generate_french_content(
+                WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                date=datetime(2026, 3, 1),
+            )
+
+        assert mock_run.call_count == 1
+        mock_sleep.assert_not_called()
+        assert "OAuth session expired" in result["_error"]
+        assert "_fatal" not in result  # internal flag, not part of the report data
+        for key in _EXPECTED_KEYS:
+            assert result[key] == _FALLBACK_MSG
+
+    def test_non_auth_failure_still_retries(self):
+        proc = MagicMock(returncode=1, stdout="", stderr="transient network wobble")
+        with patch("morning_report.french_gen.subprocess.run", return_value=proc) as mock_run, \
+             patch("morning_report.french_gen.time.sleep"):
+            generate_french_content(
+                WEATHER_DATA, MARKETS_DATA, MEDITATION_DATA,
+                date=datetime(2026, 3, 1),
+            )
+
+        assert mock_run.call_count == _MAX_RETRIES
+
+
+class TestBuildCliEnv:
+    def test_supplies_token_from_keychain(self):
+        with patch.dict("os.environ", {}, clear=True), \
+             patch("morning_report.french_gen.keychain.get_claude_token", return_value="tok-abc"):
+            env = _build_cli_env()
+
+        assert env["CLAUDE_CODE_OAUTH_TOKEN"] == "tok-abc"
+
+    def test_existing_env_token_wins_over_keychain(self):
+        with patch.dict("os.environ", {"CLAUDE_CODE_OAUTH_TOKEN": "tok-env"}, clear=True), \
+             patch("morning_report.french_gen.keychain.get_claude_token", return_value="tok-keychain"):
+            env = _build_cli_env()
+
+        assert env["CLAUDE_CODE_OAUTH_TOKEN"] == "tok-env"
+
+    def test_no_token_anywhere_leaves_var_unset(self):
+        with patch.dict("os.environ", {}, clear=True), \
+             patch("morning_report.french_gen.keychain.get_claude_token", return_value=None):
+            env = _build_cli_env()
+
+        assert "CLAUDE_CODE_OAUTH_TOKEN" not in env
+
+    def test_strips_claudecode_and_api_key(self):
+        with patch.dict(
+            "os.environ",
+            {"CLAUDECODE": "1", "ANTHROPIC_API_KEY": "sk-ant-x", "PATH": "/usr/bin"},
+            clear=True,
+        ), patch("morning_report.french_gen.keychain.get_claude_token", return_value=None):
+            env = _build_cli_env()
+
+        assert "CLAUDECODE" not in env
+        assert "ANTHROPIC_API_KEY" not in env
+        assert env["PATH"] == "/usr/bin"

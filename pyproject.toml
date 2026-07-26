@@ -12,9 +12,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-api = [
-    "anthropic>=0.40",
-]
 markets = [
     "yfinance>=0.2",
 ]
